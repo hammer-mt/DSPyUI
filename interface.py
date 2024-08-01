@@ -1,5 +1,6 @@
 import gradio as gr
 import json
+import pandas as pd
 
 from helpers import compile_program, load_csv
 
@@ -11,20 +12,28 @@ with gr.Blocks() as iface:
     input_count = gr.State(1)
     output_count = gr.State(1)
 
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("### Inputs")
+            add_input_btn = gr.Button("Add Input Field")
+            add_input_btn.click(lambda count: count + 1, input_count, input_count)
+        with gr.Column():
+            gr.Markdown("### Outputs")
+            add_output_btn = gr.Button("Add Output Field")
+            add_output_btn.click(lambda count: count + 1, output_count, output_count)
+
     @gr.render(inputs=[input_count, output_count])
     def render_tracks(input_count, output_count):
         inputs = []
         outputs = []
         with gr.Row():
             with gr.Column():
-                gr.Markdown("### Inputs")
                 for i in range(input_count):
                     with gr.Group():
                         input = gr.Textbox(placeholder=f"Input{i+1}", key=f"input-{i}", show_label=False)
                         inputs.append(input)
             
             with gr.Column():
-                gr.Markdown("### Outputs")
                 for i in range(output_count):
                     with gr.Group():
                         output = gr.Textbox(placeholder=f"Output{i+1}", key=f"output-{i}", show_label=False)
@@ -36,25 +45,29 @@ with gr.Blocks() as iface:
             llm_model = gr.Dropdown(model_options, label="Model", value="gpt-4o-mini")
             teacher_model = gr.Dropdown(model_options, label="Teacher", value="gpt-4o")
             dspy_module = gr.Dropdown(["Predict", "ChainOfThought", "MultiChainComparison"], label="Module", value="Predict")
+        with gr.Row():
             optimizer = gr.Dropdown(["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "COPRO", "MIPRO"], label="Optimizer", value="BootstrapFewShotWithRandomSearch")
             metric_type = gr.Radio(["Exact Match", "LLM-as-a-Judge"], label="Metric", value="Exact Match")
 
+        gr.Markdown("### Data")
+        with gr.Column():
+            example_data = gr.Dataframe(
+                headers=["Input1", "Input2", "Output1"],
+                datatype=["str", "str", "str"],
+                label="Example Data"
+            )
+            csv_file = gr.File(label="Or Upload CSV")
+
         def compile(data):
+            print(data)
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
             
-            llm_model = data['llm_model']
-            teacher_model = data['teacher_model']
-            dspy_module = data['dspy_module']
-            example_data = data['example_data']
-            csv_file = data['csv_file']
-            metric_type = data['metric_type']
-            optimizer = data['optimizer']
-            
             if csv_file is not None:
-                example_data = load_csv(csv_file.name)
+                filename = csv_file.name or ""
+                example_data = load_csv(filename)
             else:
-                example_data = json.loads(example_data)
+                example_data = example_data.to_dict('records')
             
             try:
                 result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, example_data, metric_type, optimizer)
@@ -70,17 +83,6 @@ with gr.Blocks() as iface:
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, metric_type, optimizer]),
             outputs=[output, signature]
         )
-
-    with gr.Row():
-        with gr.Column():
-            add_input_btn = gr.Button("Add Input Field")
-            add_input_btn.click(lambda count: count + 1, input_count, input_count)
-        with gr.Column():
-            add_output_btn = gr.Button("Add Output Field")
-            add_output_btn.click(lambda count: count + 1, output_count, output_count)
-    
-    example_data = gr.Textbox(label="Example Data (JSON format)")
-    csv_file = gr.File(label="Or Upload CSV")
     
     compile_button = gr.Button("Compile Program")
     output = gr.Textbox(label="Compiled Program")
