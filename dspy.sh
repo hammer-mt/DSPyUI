@@ -51,8 +51,8 @@ else
 fi
 
 # Check if the Python script exists
-if [ ! -f dspy_interface.py ]; then
-    echo "dspy_interface.py not found. Please make sure the file exists in the current directory."
+if [ ! -f interface.py ]; then
+    echo "interface.py not found. Please make sure the file exists in the current directory."
     exit 1
 fi
 
