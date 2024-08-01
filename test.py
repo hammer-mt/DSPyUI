@@ -1,33 +1,33 @@
 import gradio as gr
 
 with gr.Blocks() as demo:
-    track_count = gr.State(1)
-    add_track_btn = gr.Button("Add Track")
+    input_count = gr.State(1)
+    add_input_btn = gr.Button("Add Input")
 
-    add_track_btn.click(lambda count: count + 1, track_count, track_count)
+    add_input_btn.click(lambda count: count + 1, input_count, input_count)
 
-    @gr.render(inputs=track_count)
+    @gr.render(inputs=input_count)
     def render_tracks(count):
-        names = []
+        inputs = []
         with gr.Row():
             for i in range(count):
                 with gr.Column(variant="panel", min_width=200):
                     
-                    track_name = gr.Textbox(placeholder="Track Name", key=f"name-{i}", show_label=True)
-                    names.append(track_name)
+                    input = gr.Textbox(placeholder="Input", key=f"input-{i}", show_label=True)
+                    inputs.append(input)
 
 
             def merge(data):
                 output = ""
-                for name in names:
-                    name_val = data[name]
-                    output += name_val + ", "
+                for input in inputs:
+                    input_val = data[input]
+                    output += input_val + ", "
 
                 return output
 
-            merge_btn.click(merge, set(names), output_audio)
+            submit_btn.click(merge, set(inputs), output_inputs)
 
-    merge_btn = gr.Button("Merge Tracks")
-    output_audio = gr.Textbox(label="Output", interactive=False)
+    submit_btn = gr.Button("Print Inputs")
+    output_inputs = gr.Textbox(label="Output", interactive=False)
 
 demo.launch()
