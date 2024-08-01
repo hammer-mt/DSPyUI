@@ -51,9 +51,10 @@ with gr.Blocks() as iface:
 
         gr.Markdown("### Data")
         with gr.Column():
+            # TODO: make this the actual values inputted instead of the Input numbers
             example_data = gr.Dataframe(
-                headers=["Input1", "Input2", "Output1"],
-                datatype=["str", "str", "str"],
+                headers=[f"Input{i+1}" for i in range(input_count)] + [f"Output{i+1}" for i in range(output_count)],
+                datatype=["str"] * (input_count + output_count),
                 label="Example Data"
             )
             csv_file = gr.File(label="Or Upload CSV")
