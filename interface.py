@@ -2,7 +2,7 @@ import gradio as gr
 import json
 import pandas as pd
 
-from helpers import compile_program, load_csv
+from core import compile_program, load_csv
 
 # Gradio interface
 with gr.Blocks() as iface:
@@ -23,7 +23,7 @@ with gr.Blocks() as iface:
             add_output_btn.click(lambda count: count + 1, output_count, output_count)
 
     @gr.render(inputs=[input_count, output_count])
-    def render_tracks(input_count, output_count):
+    def render_variables(input_count, output_count):
         inputs = []
         outputs = []
         with gr.Row():
@@ -60,29 +60,29 @@ with gr.Blocks() as iface:
             csv_file = gr.File(label="Or Upload CSV")
 
         def compile(data):
+            print("DATA:\n")
             print(data)
+            print("---")
+
+            print("EXAMPLE DATA:\n")
+            print(data[example_data])
+            print("---")
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
-            
-            if csv_file is not None:
-                filename = csv_file.name or ""
-                example_data = load_csv(filename)
-            else:
-                example_data = example_data.to_dict('records')
-            
-            try:
-                result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, example_data, metric_type, optimizer)
-            except Exception as e:
-                result = f"An error occurred: {str(e)}"
+        
+            # try:
+            #     result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, example_data_records, metric_type, optimizer)
+            # except Exception as e:
+            #     result = f"An error occurred: {str(e)}"
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
             
-            return result, signature
+            return signature
 
         compile_button.click(
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, metric_type, optimizer]),
-            outputs=[output, signature]
+            outputs=[signature]
         )
     
     compile_button = gr.Button("Compile Program")
