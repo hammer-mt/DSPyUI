@@ -92,8 +92,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     example_data_list = example_data.to_dict('records')
 
     # Create dataset with correct field names and convert 'funny' to string
-    dataset = [dspy.Example(**{input_fields[i]: example[f'Input{i+1}'] for i in range(len(input_fields))},
-                            **{output_fields[i]: str(example[f'Output{i+1}']) for i in range(len(output_fields))}).with_inputs(*input_fields)
+    dataset = [dspy.Example(**{input_fields[i]: example[input_fields[i]] for i in range(len(input_fields))},
+                            **{output_fields[i]: str(example[output_fields[i]]) for i in range(len(output_fields))}).with_inputs(*input_fields)
                for example in example_data_list]
 
     print("Dataset:")
