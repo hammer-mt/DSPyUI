@@ -9,34 +9,42 @@ with gr.Blocks() as iface:
     gr.Markdown("# DSPy Program Compiler")
     gr.Markdown("Compile a DSPy program by specifying parameters and example data.")
     
-    input_count = gr.State(1)
-    output_count = gr.State(1)
+    input_values = gr.State(["Input1"])
+    output_values = gr.State(["Output1"])
 
     with gr.Row():
         with gr.Column():
             gr.Markdown("### Inputs")
             add_input_btn = gr.Button("Add Input Field")
-            add_input_btn.click(lambda count: count + 1, input_count, input_count)
+            add_input_btn.click(
+                lambda values: values + [f"Input{len(values)+1}"],
+                inputs=input_values,
+                outputs=input_values
+            )
         with gr.Column():
             gr.Markdown("### Outputs")
             add_output_btn = gr.Button("Add Output Field")
-            add_output_btn.click(lambda count: count + 1, output_count, output_count)
+            add_output_btn.click(
+                lambda values: values + [f"Output{len(values)+1}"],
+                inputs=output_values,
+                outputs=output_values
+            )
 
-    @gr.render(inputs=[input_count, output_count])
-    def render_variables(input_count, output_count):
+    @gr.render(inputs=[input_values, output_values])
+    def render_variables(input_values, output_values):
         inputs = []
         outputs = []
         with gr.Row():
             with gr.Column():
-                for i in range(input_count):
+                for i, input_value in enumerate(input_values):
                     with gr.Group():
-                        input = gr.Textbox(placeholder=f"Input{i+1}", key=f"input-{i}", show_label=False)
+                        input = gr.Textbox(placeholder=input_value, key=f"input-{i}", show_label=False)
                         inputs.append(input)
             
             with gr.Column():
-                for i in range(output_count):
+                for i, output_value in enumerate(output_values):
                     with gr.Group():
-                        output = gr.Textbox(placeholder=f"Output{i+1}", key=f"output-{i}", show_label=False)
+                        output = gr.Textbox(placeholder=output_value, key=f"output-{i}", show_label=False)
                         outputs.append(output)
 
         gr.Markdown("### Settings")
@@ -53,9 +61,12 @@ with gr.Blocks() as iface:
         with gr.Column():
             # TODO: make this the actual values inputted instead of the Input numbers
             example_data = gr.Dataframe(
-                headers=[f"Input{i+1}" for i in range(input_count)] + [f"Output{i+1}" for i in range(output_count)],
-                datatype=["str"] * (input_count + output_count),
-                label="Example Data"
+                headers=input_values + output_values,
+                datatype=["str"] * (len(input_values) + len(output_values)),
+                label="Example Data",
+                interactive=True,
+                row_count=1,
+                col_count=(len(input_values) + len(output_values), "fixed")
             )
             csv_file = gr.File(label="Or Upload CSV")
 
