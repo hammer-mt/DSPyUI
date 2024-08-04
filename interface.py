@@ -88,6 +88,7 @@ with gr.Blocks() as iface:
             )
             export_csv_btn = gr.Button("Export to CSV", visible=False)
             csv_download = gr.File(label="Download CSV", visible=False)
+            error_message = gr.Markdown()
 
         compile_button = gr.Button("Compile Program", visible=False, variant="primary")
         result = gr.Textbox(label="Optimization Result", visible=False)
@@ -124,16 +125,26 @@ with gr.Blocks() as iface:
             outputs=[example_data, export_csv_btn, compile_button, result, signature]
         )
 
-        def process_csv(file):
+        def process_csv(file, *args):
             if file is not None:
-                df = pd.read_csv(file.name)
-                return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
-            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+                try:
+                    df = pd.read_csv(file.name)
+                    # Use the actual input and output names entered by the user
+                    input_fields = [arg for arg in args[:len(input_values)] if arg and arg.strip()]
+                    output_fields = [arg for arg in args[len(input_values):] if arg and arg.strip()]
+                    expected_headers = input_fields + output_fields
+                    
+                    if list(df.columns) != expected_headers:
+                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
+                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+                except Exception as e:
+                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
+            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
         upload_csv_btn.upload(
             process_csv,
-            inputs=[upload_csv_btn],
-            outputs=[example_data, example_data, export_csv_btn, compile_button, result, signature]
+            inputs=[upload_csv_btn] + inputs + outputs,
+            outputs=[example_data, example_data, export_csv_btn, compile_button, result, signature, error_message]
         )
 
         def export_to_csv(data):
