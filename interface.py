@@ -60,18 +60,17 @@ with gr.Blocks() as iface:
 
         gr.Markdown("### Data")
         with gr.Column():
-            # TODO: make this the actual values inputted instead of the Input numbers
             example_data = gr.Dataframe(
                 headers=input_values + output_values,
                 datatype=["str"] * (len(input_values) + len(output_values)),
-                label="Example Data",
                 interactive=True,
                 row_count=1,
                 col_count=(len(input_values) + len(output_values), "fixed")
             )
-            export_csv_btn = gr.Button("Export to CSV")
-            csv_download = gr.File(label="Download CSV", visible=False)
-            csv_file = gr.File(label="Or Upload CSV")
+            with gr.Row():
+                export_csv_btn = gr.Button("Export to CSV")
+                csv_download = gr.File(label="Download CSV", visible=False)
+                csv_file = gr.UploadButton(label="Upload CSV", file_types=[".csv"])
 
         def export_to_csv(data):
             df = pd.DataFrame(data)
@@ -79,7 +78,11 @@ with gr.Blocks() as iface:
             df.to_csv(filename, index=False)
             return filename
 
-        
+        def process_csv(file):
+            if file is not None:
+                df = pd.read_csv(file.name)
+                return df
+            return None
 
         export_csv_btn.click(
             export_to_csv,
@@ -88,6 +91,12 @@ with gr.Blocks() as iface:
         ).then(
             lambda: gr.update(visible=True),
             outputs=[csv_download]
+        )
+
+        csv_file.upload(
+            process_csv,
+            inputs=[csv_file],
+            outputs=[example_data]
         )
 
         def compile(data):
@@ -101,23 +110,23 @@ with gr.Blocks() as iface:
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
         
-            # try:
-            #     result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, example_data_records, metric_type, optimizer)
-            # except Exception as e:
-            #     result = f"An error occurred: {str(e)}"
+            try:
+                result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, data[example_data], metric_type, optimizer)
+            except Exception as e:
+                result = f"An error occurred: {str(e)}"
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
             
-            return signature
+            return result, signature
 
         compile_button.click(
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, metric_type, optimizer]),
-            outputs=[signature]
+            outputs=[result, signature]
         )
-    
+    gr.Markdown("### Optimize")
     compile_button = gr.Button("Compile Program")
-    output = gr.Textbox(label="Compiled Program")
+    result = gr.Textbox(label="Optimization Result")
     signature = gr.Textbox(label="Signature", interactive=False)
 
 # Launch the interface
