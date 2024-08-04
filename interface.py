@@ -55,7 +55,7 @@ with gr.Blocks() as iface:
             teacher_model = gr.Dropdown(model_options, label="Teacher", value="gpt-4o")
             dspy_module = gr.Dropdown(["Predict", "ChainOfThought", "MultiChainComparison"], label="Module", value="Predict")
         with gr.Row():
-            optimizer = gr.Dropdown(["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "COPRO", "MIPRO"], label="Optimizer", value="BootstrapFewShotWithRandomSearch")
+            optimizer = gr.Dropdown(["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "COPRO", "MIPRO"], label="Optimizer", value="BootstrapFewShot")
             metric_type = gr.Radio(["Exact Match", "LLM-as-a-Judge"], label="Metric", value="Exact Match")
 
         gr.Markdown("### Data")
