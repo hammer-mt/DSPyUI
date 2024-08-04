@@ -1,6 +1,7 @@
 import gradio as gr
 import json
 import pandas as pd
+import io
 
 from core import compile_program, load_csv
 
@@ -38,13 +39,13 @@ with gr.Blocks() as iface:
             with gr.Column():
                 for i, input_value in enumerate(input_values):
                     with gr.Group():
-                        input = gr.Textbox(placeholder=input_value, key=f"input-{i}", show_label=False)
+                        input = gr.Textbox(placeholder=input_value, key=f"input-{i}", show_label=True, label=f"Input {i+1}")
                         inputs.append(input)
             
             with gr.Column():
                 for i, output_value in enumerate(output_values):
                     with gr.Group():
-                        output = gr.Textbox(placeholder=output_value, key=f"output-{i}", show_label=False)
+                        output = gr.Textbox(placeholder=output_value, key=f"output-{i}", show_label=True, label=f"Output {i+1}")
                         outputs.append(output)
 
         gr.Markdown("### Settings")
@@ -68,7 +69,26 @@ with gr.Blocks() as iface:
                 row_count=1,
                 col_count=(len(input_values) + len(output_values), "fixed")
             )
+            export_csv_btn = gr.Button("Export to CSV")
+            csv_download = gr.File(label="Download CSV", visible=False)
             csv_file = gr.File(label="Or Upload CSV")
+
+        def export_to_csv(data):
+            df = pd.DataFrame(data)
+            filename = "exported_data.csv"
+            df.to_csv(filename, index=False)
+            return filename
+
+        
+
+        export_csv_btn.click(
+            export_to_csv,
+            inputs=[example_data],
+            outputs=[csv_download]
+        ).then(
+            lambda: gr.update(visible=True),
+            outputs=[csv_download]
+        )
 
         def compile(data):
             print("DATA:\n")
