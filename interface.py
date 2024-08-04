@@ -68,9 +68,11 @@ with gr.Blocks() as iface:
                 col_count=(len(input_values) + len(output_values), "fixed")
             )
             with gr.Row():
-                export_csv_btn = gr.Button("Export to CSV")
-                csv_download = gr.File(label="Download CSV", visible=False)
                 csv_file = gr.UploadButton(label="Upload CSV", file_types=[".csv"])
+                export_csv_btn = gr.Button("Export to CSV")
+            
+            csv_download = gr.File(label="Download CSV", visible=False)
+                
 
         def export_to_csv(data):
             df = pd.DataFrame(data)
@@ -109,11 +111,18 @@ with gr.Blocks() as iface:
             print("---")
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
-        
-            try:
-                result = compile_program(input_fields, output_fields, llm_model, teacher_model, dspy_module, data[example_data], metric_type, optimizer)
-            except Exception as e:
-                result = f"An error occurred: {str(e)}"
+
+
+            result = compile_program(
+                input_fields,
+                output_fields,
+                data[dspy_module],
+                data[llm_model], 
+                data[teacher_model],
+                data[example_data],
+                data[optimizer]
+            )
+
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
             
@@ -121,7 +130,7 @@ with gr.Blocks() as iface:
 
         compile_button.click(
             compile,
-            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, metric_type, optimizer]),
+            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, optimizer]),  # Remove metric_type
             outputs=[result, signature]
         )
     gr.Markdown("### Optimize")
