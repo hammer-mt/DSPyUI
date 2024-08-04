@@ -39,13 +39,13 @@ with gr.Blocks() as iface:
             with gr.Column():
                 for i, input_value in enumerate(input_values):
                     with gr.Group():
-                        input = gr.Textbox(placeholder=input_value, key=f"input-{i}", show_label=True, label=f"Input {i+1}")
+                        input = gr.Textbox(placeholder=input_value, key=f"input-{i}", show_label=False, label=f"Input {i+1}")
                         inputs.append(input)
             
             with gr.Column():
                 for i, output_value in enumerate(output_values):
                     with gr.Group():
-                        output = gr.Textbox(placeholder=output_value, key=f"output-{i}", show_label=True, label=f"Output {i+1}")
+                        output = gr.Textbox(placeholder=output_value, key=f"output-{i}", show_label=False, label=f"Output {i+1}")
                         outputs.append(output)
 
         gr.Markdown("### Settings")
@@ -60,31 +60,66 @@ with gr.Blocks() as iface:
 
         gr.Markdown("### Data")
         with gr.Column():
+            with gr.Row():
+                enter_manually_btn = gr.Button("Enter manually")
+                upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"])
+            
             example_data = gr.Dataframe(
                 headers=input_values + output_values,
                 datatype=["str"] * (len(input_values) + len(output_values)),
                 interactive=True,
                 row_count=1,
-                col_count=(len(input_values) + len(output_values), "fixed")
+                col_count=(len(input_values) + len(output_values), "fixed"),
+                visible=False
             )
-            with gr.Row():
-                csv_file = gr.UploadButton(label="Upload CSV", file_types=[".csv"])
-                export_csv_btn = gr.Button("Export to CSV")
-            
+            export_csv_btn = gr.Button("Export to CSV", visible=False)
             csv_download = gr.File(label="Download CSV", visible=False)
-                
+
+        compile_button = gr.Button("Compile Program", visible=False, variant="primary")
+        result = gr.Textbox(label="Optimization Result", visible=False)
+        signature = gr.Textbox(label="Signature", interactive=False, visible=False)
+
+        def show_dataframe(*args):
+            data = {f"input-{i}": value for i, value in enumerate(args[:len(input_values)])}
+            data.update({f"output-{i}": value for i, value in enumerate(args[len(input_values):])})
+            
+            headers = input_values + output_values
+            print("EXAMPLE DATA:\n")
+            print(data)
+            print("---")
+            input_fields = [value for key, value in data.items() if key.startswith("input-") and value and value.strip()]
+            output_fields = [value for key, value in data.items() if key.startswith("output-") and value and value.strip()]
+            print("INPUT FIELDS:\n")
+            print(input_fields)
+            print("---")
+            print("OUTPUT FIELDS:\n")
+            print(output_fields)
+            print("---")
+            return gr.update(visible=True, headers=headers), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
+
+        enter_manually_btn.click(
+            show_dataframe,
+            inputs=inputs + outputs,
+            outputs=[example_data, export_csv_btn, compile_button, result, signature]
+        )
+
+        def process_csv(file):
+            if file is not None:
+                df = pd.read_csv(file.name)
+                return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
+            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+
+        upload_csv_btn.upload(
+            process_csv,
+            inputs=[upload_csv_btn],
+            outputs=[example_data, example_data, export_csv_btn, compile_button, result, signature]
+        )
 
         def export_to_csv(data):
             df = pd.DataFrame(data)
             filename = "exported_data.csv"
             df.to_csv(filename, index=False)
             return filename
-
-        def process_csv(file):
-            if file is not None:
-                df = pd.read_csv(file.name)
-                return df
-            return None
 
         export_csv_btn.click(
             export_to_csv,
@@ -93,12 +128,6 @@ with gr.Blocks() as iface:
         ).then(
             lambda: gr.update(visible=True),
             outputs=[csv_download]
-        )
-
-        csv_file.upload(
-            process_csv,
-            inputs=[csv_file],
-            outputs=[example_data]
         )
 
         def compile(data):
@@ -130,13 +159,9 @@ with gr.Blocks() as iface:
 
         compile_button.click(
             compile,
-            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, csv_file, optimizer]),  # Remove metric_type
+            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer]),  # Remove metric_type
             outputs=[result, signature]
         )
-    gr.Markdown("### Optimize")
-    compile_button = gr.Button("Compile Program")
-    result = gr.Textbox(label="Optimization Result")
-    signature = gr.Textbox(label="Signature", interactive=False)
 
 # Launch the interface
 iface.launch()
