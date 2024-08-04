@@ -16,17 +16,31 @@ with gr.Blocks() as iface:
     with gr.Row():
         with gr.Column():
             gr.Markdown("### Inputs")
-            add_input_btn = gr.Button("Add Input Field")
+            with gr.Row():
+                add_input_btn = gr.Button("Add Input Field")
+                del_input_btn = gr.Button("Delete Last Input")
             add_input_btn.click(
                 lambda values: values + [f"Input{len(values)+1}"],
                 inputs=input_values,
                 outputs=input_values
             )
+            del_input_btn.click(
+                lambda values: values[:-1] if len(values) > 1 else values,
+                inputs=input_values,
+                outputs=input_values
+            )
         with gr.Column():
             gr.Markdown("### Outputs")
-            add_output_btn = gr.Button("Add Output Field")
+            with gr.Row():
+                add_output_btn = gr.Button("Add Output Field")
+                del_output_btn = gr.Button("Delete Last Output")
             add_output_btn.click(
                 lambda values: values + [f"Output{len(values)+1}"],
+                inputs=output_values,
+                outputs=output_values
+            )
+            del_output_btn.click(
+                lambda values: values[:-1] if len(values) > 1 else values,
                 inputs=output_values,
                 outputs=output_values
             )
@@ -83,7 +97,6 @@ with gr.Blocks() as iface:
             data = {f"input-{i}": value for i, value in enumerate(args[:len(input_values)])}
             data.update({f"output-{i}": value for i, value in enumerate(args[len(input_values):])})
             
-            headers = input_values + output_values
             print("EXAMPLE DATA:\n")
             print(data)
             print("---")
@@ -94,6 +107,10 @@ with gr.Blocks() as iface:
             print("---")
             print("OUTPUT FIELDS:\n")
             print(output_fields)
+            print("---")
+            headers = input_fields + output_fields
+            print("HEADERS:\n")
+            print(headers)
             print("---")
             return gr.update(visible=True, headers=headers), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
 
