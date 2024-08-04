@@ -112,7 +112,11 @@ with gr.Blocks() as iface:
             print("HEADERS:\n")
             print(headers)
             print("---")
-            return gr.update(visible=True, headers=headers), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
+            
+            # Create a new dataframe with the correct headers
+            new_df = pd.DataFrame(columns=headers)
+            
+            return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
 
         enter_manually_btn.click(
             show_dataframe,
