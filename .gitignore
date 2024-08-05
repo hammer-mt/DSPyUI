@@ -162,6 +162,4 @@ cython_debug/
 dspyui_env/
 flagged/
 local_cache/
-
-*.csv
 exported_data.csv
