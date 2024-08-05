@@ -1,10 +1,7 @@
 import gradio as gr
-import json
 import pandas as pd
-import io
-from dspy.signatures import InputField, OutputField
 
-from core import compile_program, load_csv
+from core import compile_program
 
 # Gradio interface
 with gr.Blocks() as iface:
@@ -12,7 +9,12 @@ with gr.Blocks() as iface:
     gr.Markdown("Compile a DSPy program by specifying parameters and example data.")
     
     # Add the instructions textbox here, at the top of the interface
-    instructions = gr.Textbox(label="Task Instructions", lines=3, placeholder="Enter task instructions here...")
+    with gr.Row():
+        with gr.Column(scale=4):
+            instructions = gr.Textbox(label="Task Instructions", lines=3, placeholder="Enter task instructions here...")
+
+        with gr.Column(scale=1):
+            load_example_btn = gr.Button("Load Example")
     
     input_values = gr.State(["Input1"])
     output_values = gr.State(["Output1"])
@@ -81,7 +83,7 @@ with gr.Blocks() as iface:
             with gr.Row():
                 enter_manually_btn = gr.Button("Enter manually")
                 upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"])
-            
+
             example_data = gr.Dataframe(
                 headers=input_values + output_values,
                 datatype=["str"] * (len(input_values) + len(output_values)),
@@ -198,6 +200,41 @@ with gr.Blocks() as iface:
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),  # Add instructions here
             outputs=[result, signature]
+        )
+
+        def load_example():
+            df = pd.read_csv("example_data.csv")
+            input_fields = ["joke", "topic"]
+            output_fields = ["funny"]
+            task_description = "Determine if a given joke is funny based on its content and topic."
+            
+            return (
+                df,
+                gr.update(visible=True),
+                gr.update(visible=True),
+                gr.update(visible=True),
+                gr.update(visible=True),
+                gr.update(visible=True),
+                gr.update(visible=False),
+                task_description,
+                *[gr.update(value=field) for field in input_fields],
+                *[gr.update(value=field) for field in output_fields]
+            )
+
+        load_example_btn.click(
+            load_example,
+            outputs=[
+                example_data,
+                example_data,
+                export_csv_btn,
+                compile_button,
+                result,
+                signature,
+                error_message,
+                instructions,
+                *inputs,
+                *outputs
+            ]
         )
 
 # Launch the interface
