@@ -57,15 +57,17 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Create the DSPy module
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
-            def __init__(self):
+            def __init__(self, lm):
                 super().__init__()
                 self.predictor = dspy.Predict(CustomSignature)
+                self.lm = lm
             
             def forward(self, **kwargs):
-                result = self.predictor(**kwargs)
+                with dspy.context(lm=self.lm):
+                    result = self.predictor(**kwargs)
                 return dspy.Prediction(**{field: getattr(result, field) for field in output_fields})
         
-        module = CustomPredictModule()
+        module = CustomPredictModule(lm)
     elif dspy_module == "ChainOfThought":
         class CustomChainOfThoughtModule(dspy.Module):
             def __init__(self):
@@ -129,15 +131,23 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
-    # Before compiling the program, print the current LM configuration
-    print("Current LM configuration:", dspy.settings.lm)
+    # Print LM configuration before compilation
+    print("LM configuration before compilation:", dspy.settings.lm)
 
-    # Compile the program
-    compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
+    # Ensure LM is set in the context for compilation and evaluation
+    with dspy.context(lm=lm):
+        # Compile the program
+        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
 
-    # Evaluate the compiled program
-    evaluate = Evaluate(metric=metric, devset=devset)
-    score = evaluate(compiled_program)
+        # Print LM configuration after compilation
+        print("LM configuration after compilation:", dspy.settings.lm)
+
+        # Evaluate the compiled program
+        evaluate = Evaluate(metric=metric, devset=devset)
+        score = evaluate(compiled_program)
+
+    # Print LM configuration after evaluation
+    print("LM configuration after evaluation:", dspy.settings.lm)
 
     return f"""Program compiled successfully!
 Evaluation score: {score}
