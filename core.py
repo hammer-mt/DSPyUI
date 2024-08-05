@@ -13,18 +13,22 @@ from pydantic import create_model
 def load_csv(file_path):
     return pd.read_csv(file_path).to_dict('records')
 
-def create_custom_signature(input_fields: List[str], output_fields: List[str]):
+def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str):
     fields = {field: (dspy.InputField, Field(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
     fields.update({field: (dspy.OutputField, Field(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
     
     CustomSignatureModel = create_model('CustomSignatureModel', **fields)
     
     class CustomSignature(dspy.Signature, CustomSignatureModel):
-        pass
+        """
+        {instructions}
+        """
+    
+    CustomSignature.__doc__ = CustomSignature.__doc__.format(instructions=instructions)
     
     return CustomSignature
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
@@ -44,7 +48,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
     # Create the custom signature
-    CustomSignature = create_custom_signature(input_fields, output_fields)
+    CustomSignature = create_custom_signature(input_fields, output_fields, instructions)
 
     # Create the DSPy module
     if dspy_module == "Predict":

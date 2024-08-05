@@ -2,6 +2,7 @@ import gradio as gr
 import json
 import pandas as pd
 import io
+from dspy.signatures import InputField, OutputField
 
 from core import compile_program, load_csv
 
@@ -9,6 +10,9 @@ from core import compile_program, load_csv
 with gr.Blocks() as iface:
     gr.Markdown("# DSPy Program Compiler")
     gr.Markdown("Compile a DSPy program by specifying parameters and example data.")
+    
+    # Add the instructions textbox here, at the top of the interface
+    instructions = gr.Textbox(label="Task Instructions", lines=3, placeholder="Enter task instructions here...")
     
     input_values = gr.State(["Input1"])
     output_values = gr.State(["Output1"])
@@ -181,7 +185,8 @@ with gr.Blocks() as iface:
                 data[llm_model], 
                 data[teacher_model],
                 data[example_data],
-                data[optimizer]
+                data[optimizer],
+                data[instructions]  # Add this line to pass instructions to compile_program
             )
 
             
@@ -191,7 +196,7 @@ with gr.Blocks() as iface:
 
         compile_button.click(
             compile,
-            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer]),  # Remove metric_type
+            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),  # Add instructions here
             outputs=[result, signature]
         )
 
