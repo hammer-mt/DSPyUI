@@ -125,9 +125,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     elif optimizer == "BootstrapFewShotWithRandomSearch":
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm))
     elif optimizer == "MIPRO":
-        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm)
     elif optimizer == "COPRO":
-        teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        teleprompter = COPRO(metric=metric, prompt_model=teacher_lm)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
@@ -136,8 +136,22 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
 
     # Ensure LM is set in the context for compilation and evaluation
     with dspy.context(lm=lm):
+        kwargs = dict(num_threads=4, display_progress=True, display_table=0)
         # Compile the program
-        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
+        if optimizer == "COPRO":
+            
+            compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
+        if optimizer == "MIPRO":
+            num_trials = 10  # Adjust this value as needed
+            max_bootstrapped_demos = 5  # Adjust this value as needed
+            max_labeled_demos = 5  # Adjust this value as needed
+
+            compiled_program = teleprompter.compile(module, trainset=trainset, num_trials=num_trials,
+        max_bootstrapped_demos=max_bootstrapped_demos,
+        max_labeled_demos=max_labeled_demos,
+        eval_kwargs=kwargs)
+        else:
+            compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
 
         # Print LM configuration after compilation
         print("LM configuration after compilation:", dspy.settings.lm)
