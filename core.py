@@ -14,8 +14,8 @@ def load_csv(file_path):
     return pd.read_csv(file_path).to_dict('records')
 
 def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str):
-    fields = {field: (dspy.InputField, Field(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
-    fields.update({field: (dspy.OutputField, Field(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
+    fields = {field: (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
+    fields.update({field: (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
     
     CustomSignatureModel = create_model('CustomSignatureModel', **fields)
     
@@ -37,7 +37,11 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
+    # Configure DSPy with the LM
     dspy.configure(lm=lm)
+
+    # Verify that the LM is configured
+    assert dspy.settings.lm is not None, "Failed to configure LM"
 
     # Set up the teacher model
     if teacher_model.startswith("gpt-"):
@@ -124,6 +128,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
+
+    # Before compiling the program, print the current LM configuration
+    print("Current LM configuration:", dspy.settings.lm)
 
     # Compile the program
     compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
