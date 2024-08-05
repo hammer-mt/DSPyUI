@@ -97,8 +97,10 @@ with gr.Blocks() as iface:
             error_message = gr.Markdown()
 
         compile_button = gr.Button("Compile Program", visible=False, variant="primary")
-        result = gr.Textbox(label="Optimization Result", visible=False)
+        usage_instructions = gr.Textbox(label="Usage Instructions", visible=False)
+        optimized_prompt = gr.Textbox(label="Optimized Prompt", visible=False)
         signature = gr.Textbox(label="Signature", interactive=False, visible=False)
+        final_prompt = gr.Textbox(label="Final Prompt", interactive=False, visible=False)
 
         def show_dataframe(*args):
             data = {f"input-{i}": value for i, value in enumerate(args[:len(input_values)])}
@@ -123,12 +125,12 @@ with gr.Blocks() as iface:
             # Create a new dataframe with the correct headers
             new_df = pd.DataFrame(columns=headers)
             
-            return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
+            return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
 
         enter_manually_btn.click(
             show_dataframe,
             inputs=inputs + outputs,
-            outputs=[example_data, export_csv_btn, compile_button, result, signature]
+            outputs=[example_data, export_csv_btn, compile_button, usage_instructions, optimized_prompt, signature, final_prompt]
         )
 
         def process_csv(file, *args):
@@ -141,16 +143,16 @@ with gr.Blocks() as iface:
                     expected_headers = input_fields + output_fields
                     
                     if list(df.columns) != expected_headers:
-                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
-                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
+                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
                 except Exception as e:
-                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
-            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
+            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
         upload_csv_btn.upload(
             process_csv,
             inputs=[upload_csv_btn] + inputs + outputs,
-            outputs=[example_data, example_data, export_csv_btn, compile_button, result, signature, error_message]
+            outputs=[example_data, example_data, export_csv_btn, compile_button, usage_instructions, optimized_prompt, signature, final_prompt, error_message]
         )
 
         def export_to_csv(data):
@@ -179,8 +181,7 @@ with gr.Blocks() as iface:
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
 
-
-            result = compile_program(
+            usage_instructions, optimized_prompt, final_prompt = compile_program(
                 input_fields,
                 output_fields,
                 data[dspy_module],
@@ -188,18 +189,17 @@ with gr.Blocks() as iface:
                 data[teacher_model],
                 data[example_data],
                 data[optimizer],
-                data[instructions]  # Add this line to pass instructions to compile_program
+                data[instructions]
             )
-
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
             
-            return result, signature
+            return usage_instructions, optimized_prompt, signature, final_prompt
 
         compile_button.click(
             compile,
-            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),  # Add instructions here
-            outputs=[result, signature]
+            inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),
+            outputs=[usage_instructions, optimized_prompt, signature, final_prompt]
         )
 
         def load_example():
@@ -210,6 +210,7 @@ with gr.Blocks() as iface:
             
             return (
                 df,
+                gr.update(visible=True),
                 gr.update(visible=True),
                 gr.update(visible=True),
                 gr.update(visible=True),
@@ -228,9 +229,10 @@ with gr.Blocks() as iface:
                 example_data,
                 export_csv_btn,
                 compile_button,
-                result,
+                usage_instructions,
+                optimized_prompt,
                 signature,
-                error_message,
+                final_prompt,
                 instructions,
                 *inputs,
                 *outputs

@@ -139,9 +139,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         kwargs = dict(num_threads=4, display_progress=True, display_table=0)
         # Compile the program
         if optimizer == "COPRO":
-            
             compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
-        if optimizer == "MIPRO":
+        elif optimizer in ["MIPRO", "MIPROv2"]:
             num_trials = 10  # Adjust this value as needed
             max_bootstrapped_demos = 5  # Adjust this value as needed
             max_labeled_demos = 5  # Adjust this value as needed
@@ -153,17 +152,51 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         else:
             compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
 
-        # Print LM configuration after compilation
-        print("LM configuration after compilation:", dspy.settings.lm)
-
         # Evaluate the compiled program
         evaluate = Evaluate(metric=metric, devset=devset)
         score = evaluate(compiled_program)
 
-    # Print LM configuration after evaluation
-    print("LM configuration after evaluation:", dspy.settings.lm)
 
-    return f"""Program compiled successfully!
+    # Print out different parts of the compiled program
+    print("\nCompiled Program Details:")
+    if hasattr(compiled_program, 'predictor'):
+        print("Predictor attributes:")
+        for attr, value in compiled_program.predictor.__dict__.items():
+            print(f"  {attr}: {value}")
+    elif hasattr(compiled_program, 'cot'):
+        print("ChainOfThought attributes:")
+        for attr, value in compiled_program.cot.__dict__.items():
+            print(f"  {attr}: {value}")
+    elif hasattr(compiled_program, 'mcc'):
+        print("MultiChainComparison attributes:")
+        for attr, value in compiled_program.mcc.__dict__.items():
+            print(f"  {attr}: {value}")
+    else:
+        print("Compiled program structure:", compiled_program.__dict__)
+
+    # Get the optimized instructions or demonstrations
+    optimized_content = "Optimized content not available"
+    if hasattr(compiled_program, 'predictor'):
+        if hasattr(compiled_program.predictor, 'instructions'):
+            optimized_content = f"Instructions:\n{compiled_program.predictor.instructions}"
+        if hasattr(compiled_program.predictor, 'demos'):
+            optimized_content += f"\n\nDemonstrations:\n{compiled_program.predictor.demos}"
+    elif hasattr(compiled_program, 'cot'):
+        if hasattr(compiled_program.cot, 'instructions'):
+            optimized_content = f"Instructions:\n{compiled_program.cot.instructions}"
+        if hasattr(compiled_program.cot, 'demos'):
+            optimized_content += f"\n\nDemonstrations:\n{compiled_program.cot.demos}"
+    elif hasattr(compiled_program, 'mcc'):
+        if hasattr(compiled_program.mcc, 'instructions'):
+            optimized_content = f"Instructions:\n{compiled_program.mcc.instructions}"
+        if hasattr(compiled_program.mcc, 'demos'):
+            optimized_content += f"\n\nDemonstrations:\n{compiled_program.mcc.demos}"
+
+    # If we still couldn't find the optimized content, we can try to inspect the compiled_program object
+    if optimized_content == "Optimized content not available":
+        optimized_content = f"Could not retrieve optimized content. Compiled program structure: {compiled_program.__dict__}"
+
+    usage_instructions = f"""Program compiled successfully!
 Evaluation score: {score}
 You can now use the compiled program as follows:
 
@@ -172,3 +205,20 @@ compiled_program.load('compiled_program.json')
 result = compiled_program({', '.join(f'{field}=value' for field in input_fields)})
 print({', '.join(f'result.{field}' for field in output_fields)})
 """
+
+    # Use the compiled program with the first row of example data
+    if len(example_data) > 0:
+        first_row = example_data.iloc[0]
+        input_data = {field: first_row[field] for field in input_fields}
+        with dspy.context(lm=lm):
+            result = compiled_program(**input_data)
+            print('histor', dspy.settings.lm.history)
+            final_prompt = lm.history[-1]['prompt'] if lm.history else "No prompt history available"
+            print("Final prompt:", final_prompt)
+        
+        example_output = f"\nExample usage with first row of data:\n"
+        example_output += f"Input: {input_data}\n"
+        example_output += f"Output: {result}\n"
+        usage_instructions += example_output
+
+    return usage_instructions, optimized_content, final_prompt
