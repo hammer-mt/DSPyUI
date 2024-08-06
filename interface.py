@@ -181,7 +181,7 @@ with gr.Blocks() as iface:
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
 
-            usage_instructions, optimized_prompt, final_prompt = compile_program(
+            usage_instructions, optimized_prompt = compile_program(
                 input_fields,
                 output_fields,
                 data[dspy_module],
@@ -193,6 +193,8 @@ with gr.Blocks() as iface:
             )
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
+
+            final_prompt = "egg salad"
             
             return usage_instructions, optimized_prompt, signature, final_prompt
 
