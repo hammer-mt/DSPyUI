@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, BootstrapFinetune, COPRO
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, BootstrapFinetune
 from pydantic import create_model
 
 # Helper functions
@@ -99,17 +99,12 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm))
     elif optimizer == "MIPRO":
         teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm)
-    elif optimizer == "COPRO":
-        teleprompter = COPRO(metric=metric, prompt_model=teacher_lm)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
-
     kwargs = dict(num_threads=4, display_progress=True, display_table=0)
     # Compile the program
-    if optimizer == "COPRO":
-        compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
-    elif optimizer in ["MIPRO", "MIPROv2"]:
+    if optimizer == "MIPRO":
         num_trials = 10  # Adjust this value as needed
         max_bootstrapped_demos = 5  # Adjust this value as needed
         max_labeled_demos = 5  # Adjust this value as needed
