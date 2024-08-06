@@ -8,10 +8,6 @@ from dspy.evaluate import Evaluate
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, BootstrapFinetune
 from pydantic import create_model
 
-# Helper functions
-def load_csv(file_path):
-    return pd.read_csv(file_path).to_dict('records')
-
 def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str):
     fields = {field: (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
     fields.update({field: (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
@@ -28,21 +24,20 @@ def create_custom_signature(input_fields: List[str], output_fields: List[str], i
     return CustomSignature
 
 def generate_human_readable_id(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, optimizer: str, instructions: str) -> str:
-    # Extract key words from instructions
-    key_words = re.findall(r'\b\w+\b', instructions.lower())
-    key_words = [word for word in key_words if len(word) > 3 and word not in ['the', 'and', 'for', 'with']]
+    # Create a signature-based name
+    signature = '_'.join(input_fields + [':'] + output_fields)
+    signature_pascal = ''.join(word.capitalize() for word in signature.split('_'))
     
     # Combine relevant information
-    task_name = '_'.join(key_words[:2])  # Use first two key words
-    model_name = llm_model.split('-')[0]  # Use base model name
-    module_name = dspy_module.lower()
-    optimizer_name = optimizer.lower().replace('bootstrap', 'bs')
+    model_name = ''.join(word.capitalize() for word in llm_model.split('-'))
+    module_name = dspy_module
+    optimizer_name = ''.join(word.capitalize() for word in optimizer.replace('bootstrap', 'bs').replace('randomsearch', 'rs').split('_'))
     
     # Get current date
     current_date = datetime.date.today().strftime("%Y%m%d")
     
     # Create a human-readable ID with date
-    unique_id = f"{task_name}_{model_name}_{module_name}_{optimizer_name}_{current_date}"
+    unique_id = f"{signature_pascal}-{model_name}_{module_name}_{optimizer_name}-{current_date}"
     
     return unique_id
 
@@ -50,6 +45,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
+    # TODO: check if claude is working
     elif llm_model.startswith("claude-"):
         lm = dspy.Claude(model=llm_model)
     else:

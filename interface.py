@@ -19,6 +19,7 @@ with gr.Blocks() as iface:
             )
 
         with gr.Column(scale=1):
+            # TODO: make this work with two variables (right now it doesn't add the second variable to the input_values)
             load_example_btn = gr.Button("Load Example")
             gr.Markdown("Click to load a pre-configured example for demonstration purposes.", elem_classes="small-text")
     
