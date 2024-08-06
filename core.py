@@ -1,5 +1,7 @@
 import dspy
 import pandas as pd
+import re
+import datetime
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
@@ -24,6 +26,25 @@ def create_custom_signature(input_fields: List[str], output_fields: List[str], i
     CustomSignature.__doc__ = CustomSignature.__doc__.format(instructions=instructions)
     
     return CustomSignature
+
+def generate_human_readable_id(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, optimizer: str, instructions: str) -> str:
+    # Extract key words from instructions
+    key_words = re.findall(r'\b\w+\b', instructions.lower())
+    key_words = [word for word in key_words if len(word) > 3 and word not in ['the', 'and', 'for', 'with']]
+    
+    # Combine relevant information
+    task_name = '_'.join(key_words[:2])  # Use first two key words
+    model_name = llm_model.split('-')[0]  # Use base model name
+    module_name = dspy_module.lower()
+    optimizer_name = optimizer.lower().replace('bootstrap', 'bs')
+    
+    # Get current date
+    current_date = datetime.date.today().strftime("%Y%m%d")
+    
+    # Create a human-readable ID with date
+    unique_id = f"{task_name}_{model_name}_{module_name}_{optimizer_name}_{current_date}"
+    
+    return unique_id
 
 def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str) -> str:
     # Set up the LLM model
@@ -120,12 +141,19 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     evaluate = Evaluate(metric=metric, devset=devset)
     score = evaluate(compiled_program)
 
+    # Generate a human-readable ID for the compiled program
+    human_readable_id = generate_human_readable_id(input_fields, output_fields, dspy_module, llm_model, teacher_model, optimizer, instructions)
+
+    # Save the compiled program
+    compiled_program.save(f"{human_readable_id}.json")
+
     usage_instructions = f"""Program compiled successfully!
 Evaluation score: {score}
+The compiled program has been saved as '{human_readable_id}.json'.
 You can now use the compiled program as follows:
 
 compiled_program = dspy.{dspy_module}(CustomSignature)
-compiled_program.load('compiled_program.json')
+compiled_program.load('{human_readable_id}.json')
 result = compiled_program({', '.join(f'{field}=value' for field in input_fields)})
 print({', '.join(f'result.{field}' for field in output_fields)})
 """
