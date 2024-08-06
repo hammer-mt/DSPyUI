@@ -2,6 +2,7 @@ import dspy
 import pandas as pd
 import re
 import datetime
+import os
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
@@ -140,16 +141,19 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Generate a human-readable ID for the compiled program
     human_readable_id = generate_human_readable_id(input_fields, output_fields, dspy_module, llm_model, teacher_model, optimizer, instructions)
 
+    # Create 'programs' folder if it doesn't exist
+    os.makedirs('programs', exist_ok=True)
+
     # Save the compiled program
-    compiled_program.save(f"{human_readable_id}.json")
+    compiled_program.save(f"programs/{human_readable_id}.json")
 
     usage_instructions = f"""Program compiled successfully!
 Evaluation score: {score}
-The compiled program has been saved as '{human_readable_id}.json'.
+The compiled program has been saved as 'programs/{human_readable_id}.json'.
 You can now use the compiled program as follows:
 
 compiled_program = dspy.{dspy_module}(CustomSignature)
-compiled_program.load('{human_readable_id}.json')
+compiled_program.load('programs/{human_readable_id}.json')
 result = compiled_program({', '.join(f'{field}=value' for field in input_fields)})
 print({', '.join(f'result.{field}' for field in output_fields)})
 """
