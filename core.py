@@ -1,8 +1,5 @@
 import dspy
 import pandas as pd
-import json
-import ast
-from pydantic import Field
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
@@ -76,16 +73,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
                 return self.cot(**kwargs)
         
         module = CustomChainOfThoughtModule()
-    elif dspy_module == "MultiChainComparison":
-        class CustomMultiChainComparisonModule(dspy.Module):
-            def __init__(self):
-                super().__init__()
-                self.mcc = dspy.MultiChainComparison(CustomSignature)
-            
-            def forward(self, **kwargs):
-                return self.mcc(**kwargs)
-        
-        module = CustomMultiChainComparisonModule()
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 

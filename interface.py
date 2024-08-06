@@ -73,7 +73,7 @@ with gr.Blocks() as iface:
             model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini", "claude-3-sonnet", "claude-3-opus", "claude-3-haiku", "claude-3.5-sonnet"]
             llm_model = gr.Dropdown(model_options, label="Model", value="gpt-4o-mini")
             teacher_model = gr.Dropdown(model_options, label="Teacher", value="gpt-4o")
-            dspy_module = gr.Dropdown(["Predict", "ChainOfThought", "ReAct", "MultiChainComparison"], label="Module", value="Predict")
+            dspy_module = gr.Dropdown(["Predict", "ChainOfThought", "MultiChainComparison"], label="Module", value="Predict")
         with gr.Row():
             optimizer = gr.Dropdown(["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "COPRO", "MIPRO"], label="Optimizer", value="BootstrapFewShot")
             metric_type = gr.Radio(["Exact Match", "LLM-as-a-Judge"], label="Metric", value="Exact Match")
@@ -97,30 +97,18 @@ with gr.Blocks() as iface:
             error_message = gr.Markdown()
 
         compile_button = gr.Button("Compile Program", visible=False, variant="primary")
-        usage_instructions = gr.Textbox(label="Usage Instructions", visible=False)
-        optimized_prompt = gr.Textbox(label="Optimized Prompt", visible=False)
         signature = gr.Textbox(label="Signature", interactive=False, visible=False)
-        final_prompt = gr.Textbox(label="Final Prompt", interactive=False, visible=False)
+        optimized_prompt = gr.Textbox(label="Optimized Prompt", visible=False)
+        usage_instructions = gr.Textbox(label="Usage Instructions", visible=False)
 
         def show_dataframe(*args):
             data = {f"input-{i}": value for i, value in enumerate(args[:len(input_values)])}
             data.update({f"output-{i}": value for i, value in enumerate(args[len(input_values):])})
             
-            print("EXAMPLE DATA:\n")
-            print(data)
-            print("---")
             input_fields = [value for key, value in data.items() if key.startswith("input-") and value and value.strip()]
             output_fields = [value for key, value in data.items() if key.startswith("output-") and value and value.strip()]
-            print("INPUT FIELDS:\n")
-            print(input_fields)
-            print("---")
-            print("OUTPUT FIELDS:\n")
-            print(output_fields)
-            print("---")
+
             headers = input_fields + output_fields
-            print("HEADERS:\n")
-            print(headers)
-            print("---")
             
             # Create a new dataframe with the correct headers
             new_df = pd.DataFrame(columns=headers)
@@ -130,7 +118,7 @@ with gr.Blocks() as iface:
         enter_manually_btn.click(
             show_dataframe,
             inputs=inputs + outputs,
-            outputs=[example_data, export_csv_btn, compile_button, usage_instructions, optimized_prompt, signature, final_prompt]
+            outputs=[example_data, export_csv_btn, compile_button, signature, optimized_prompt, usage_instructions]
         )
 
         def process_csv(file, *args):
@@ -143,16 +131,16 @@ with gr.Blocks() as iface:
                     expected_headers = input_fields + output_fields
                     
                     if list(df.columns) != expected_headers:
-                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
-                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
+                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
                 except Exception as e:
-                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
-            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
+            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
         upload_csv_btn.upload(
             process_csv,
             inputs=[upload_csv_btn] + inputs + outputs,
-            outputs=[example_data, example_data, export_csv_btn, compile_button, usage_instructions, optimized_prompt, signature, final_prompt, error_message]
+            outputs=[example_data, example_data, export_csv_btn, compile_button, signature, optimized_prompt, usage_instructions, error_message]
         )
 
         def export_to_csv(data):
@@ -171,13 +159,6 @@ with gr.Blocks() as iface:
         )
 
         def compile(data):
-            print("DATA:\n")
-            print(data)
-            print("---")
-
-            print("EXAMPLE DATA:\n")
-            print(data[example_data])
-            print("---")
             input_fields = [data[input] for input in inputs if data[input].strip()]
             output_fields = [data[output] for output in outputs if data[output].strip()]
 
@@ -193,15 +174,13 @@ with gr.Blocks() as iface:
             )
             
             signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
-
-            final_prompt = "egg salad"
             
-            return usage_instructions, optimized_prompt, signature, final_prompt
+            return signature, optimized_prompt, usage_instructions
 
         compile_button.click(
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),
-            outputs=[usage_instructions, optimized_prompt, signature, final_prompt]
+            outputs=[signature, optimized_prompt, usage_instructions]
         )
 
         def load_example():
@@ -218,7 +197,6 @@ with gr.Blocks() as iface:
                 gr.update(visible=True),
                 gr.update(visible=True),
                 gr.update(visible=True),
-                gr.update(visible=False),
                 task_description,
                 *[gr.update(value=field) for field in input_fields],
                 *[gr.update(value=field) for field in output_fields]
@@ -231,10 +209,9 @@ with gr.Blocks() as iface:
                 example_data,
                 export_csv_btn,
                 compile_button,
-                usage_instructions,
-                optimized_prompt,
                 signature,
-                final_prompt,
+                optimized_prompt,
+                usage_instructions,
                 instructions,
                 *inputs,
                 *outputs
