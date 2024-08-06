@@ -142,7 +142,6 @@ with gr.Blocks() as iface:
             error_message = gr.Markdown()
 
         compile_button = gr.Button("Compile Program", visible=False, variant="primary")
-        compile_explanation = gr.Markdown("Click to compile your DSPy program with the specified settings and example data.", elem_classes="small-text", visible=False)
         with gr.Column(visible=False) as compilation_results:
             gr.Markdown("### Results")
             signature = gr.Textbox(label="Signature", interactive=False, info="The compiled signature of your DSPy program, showing inputs and outputs.")
@@ -162,12 +161,12 @@ with gr.Blocks() as iface:
             # Create a new dataframe with the correct headers
             new_df = pd.DataFrame(columns=headers)
             
-            return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(visible=True)
+            return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True)
 
         enter_manually_btn.click(
             show_dataframe,
             inputs=inputs + outputs,
-            outputs=[example_data, export_csv_btn, compile_button, compile_explanation]
+            outputs=[example_data, export_csv_btn, compile_button]
         )
 
         def process_csv(file, *args):
@@ -181,15 +180,15 @@ with gr.Blocks() as iface:
                     
                     if list(df.columns) != expected_headers:
                         return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
-                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=False), gr.update(visible=True)
+                    return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
                 except Exception as e:
-                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}"), gr.update(visible=False)
-            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+                    return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
+            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
         upload_csv_btn.upload(
             process_csv,
             inputs=[upload_csv_btn] + inputs + outputs,
-            outputs=[example_data, example_data, compile_button, error_message, compile_explanation]
+            outputs=[example_data, example_data, compile_button, error_message]
         )
 
         def export_to_csv(data):
@@ -250,7 +249,6 @@ with gr.Blocks() as iface:
                 gr.update(visible=True),
                 gr.update(visible=True),
                 gr.update(visible=True),
-                gr.update(visible=True),
                 task_description,
                 *[gr.update(value=field) for field in input_fields],
                 *[gr.update(value=field) for field in output_fields]
@@ -263,7 +261,6 @@ with gr.Blocks() as iface:
                 example_data,
                 export_csv_btn,
                 compile_button,
-                compile_explanation,
                 instructions,
                 *inputs,
                 *outputs
