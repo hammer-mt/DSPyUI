@@ -31,9 +31,6 @@ with gr.Blocks() as iface:
             with gr.Row():
                 add_input_btn = gr.Button("Add Input Field")
                 del_input_btn = gr.Button("Delete Last Input")
-            with gr.Row():
-                gr.Markdown("Click to add a new input field to your DSPy program.", elem_classes="small-text")
-                gr.Markdown("Click to remove the last input field from your DSPy program.", elem_classes="small-text")
             add_input_btn.click(
                 lambda values: values + [f"Input{len(values)+1}"],
                 inputs=input_values,
@@ -49,9 +46,6 @@ with gr.Blocks() as iface:
             with gr.Row():
                 add_output_btn = gr.Button("Add Output Field")
                 del_output_btn = gr.Button("Delete Last Output")
-            with gr.Row():
-                gr.Markdown("Click to add a new output field to your DSPy program.", elem_classes="small-text")
-                gr.Markdown("Click to remove the last output field from your DSPy program.", elem_classes="small-text")
             add_output_btn.click(
                 lambda values: values + [f"Output{len(values)+1}"],
                 inputs=output_values,
@@ -132,9 +126,6 @@ with gr.Blocks() as iface:
             with gr.Row():
                 enter_manually_btn = gr.Button("Enter manually")
                 upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"])
-            with gr.Row():
-                gr.Markdown("Enter example data for your DSPy program manually. Each row represents one example, with columns for inputs and outputs.", elem_classes="small-text")
-                gr.Markdown("Upload a CSV file containing example data for your DSPy program. Your columns must match the input and output names exactly.", elem_classes="small-text")
 
             example_data = gr.Dataframe(
                 headers=input_values + output_values,
