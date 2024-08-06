@@ -76,13 +76,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-    # Parse the example data into a dataset
-    # Print example data and its type
-    print("Example Data:")
-    print(example_data)
-    print("\nType of example_data:", type(example_data))
-    print("\nShape of example_data:", example_data.shape if isinstance(example_data, pd.DataFrame) else "N/A")
-
     # Convert DataFrame to list of dictionaries
     example_data_list = example_data.to_dict('records')
 
@@ -90,11 +83,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     dataset = [dspy.Example(**{input_fields[i]: example[input_fields[i]] for i in range(len(input_fields))},
                             **{output_fields[i]: str(example[output_fields[i]]) for i in range(len(output_fields))}).with_inputs(*input_fields)
                for example in example_data_list]
-
-    print("Dataset:")
-    print(dataset)
-    print("\nType of dataset:", type(dataset))
-    print("\nLength of dataset:", len(dataset))
 
     # Split the dataset
     split_index = int(0.8 * len(dataset))
@@ -116,8 +104,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
-    # Print LM configuration before compilation
-    print("LM configuration before compilation:", dspy.settings.lm)
 
     kwargs = dict(num_threads=4, display_progress=True, display_table=0)
     # Compile the program
@@ -155,7 +141,6 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         input_data = {field: first_row[field] for field in input_fields}
         result = compiled_program(**input_data)
         final_prompt = dspy.settings.lm.history[-1]['prompt'] if dspy.settings.lm.history else "No prompt history available"
-        print("Final prompt:", final_prompt)
         
         example_output = f"\nExample usage with first row of data:\n"
         example_output += f"Input: {input_data}\n"
