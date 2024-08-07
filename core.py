@@ -9,6 +9,10 @@ from dspy.evaluate import Evaluate
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, BootstrapFinetune
 from pydantic import create_model
 
+# when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
+lm = dspy.OpenAI(model="gpt-4o-mini")
+dspy.configure(lm=lm)
+
 def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str):
     fields = {field: (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
     fields.update({field: (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
@@ -116,8 +120,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # TODO: fix the no lm loaded issue
     elif optimizer == "BootstrapFewShotWithRandomSearch":
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm))
+    # TODO: add the COPRO optimizer once I get it working
     elif optimizer == "MIPRO":
-        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm)
+        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, requires_permission_to_run=False)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
