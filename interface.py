@@ -143,7 +143,7 @@ with gr.Blocks() as iface:
             error_message = gr.Markdown()
 
         compile_button = gr.Button("Compile Program", visible=False, variant="primary")
-        with gr.Column(visible=False) as compilation_results:
+        with gr.Column() as compilation_results:
             gr.Markdown("### Results")
             signature = gr.Textbox(label="Signature", interactive=False, info="The compiled signature of your DSPy program, showing inputs and outputs.")
             evaluation_score = gr.Number(label="Evaluation Score", info="The evaluation score of your compiled DSPy program.")
@@ -231,12 +231,12 @@ with gr.Blocks() as iface:
             # Remove the evaluation score line from usage_instructions
             usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Evaluation score:")])
             
-            return signature, evaluation_score, optimized_prompt, usage_instructions, gr.update(visible=True)
+            return signature, evaluation_score, optimized_prompt, usage_instructions
 
         compile_button.click(
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),
-            outputs=[signature, evaluation_score, optimized_prompt, usage_instructions, compilation_results]
+            outputs=[signature, evaluation_score, optimized_prompt, usage_instructions]
         )
 
         def load_example():

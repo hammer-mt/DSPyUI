@@ -117,7 +117,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the optimizer
     if optimizer == "BootstrapFewShot":
         teleprompter = BootstrapFewShot(metric=metric, teacher_settings=dict(lm=teacher_lm))
-    # TODO: fix the no lm loaded issue
     elif optimizer == "BootstrapFewShotWithRandomSearch":
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm))
     # TODO: add the COPRO optimizer once I get it working
