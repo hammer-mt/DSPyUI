@@ -50,9 +50,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
-    # TODO: check if claude is working
-    elif llm_model.startswith("claude-"):
-        lm = dspy.Claude(model=llm_model)
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -65,8 +62,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the teacher model
     if teacher_model.startswith("gpt-"):
         teacher_lm = dspy.OpenAI(model=teacher_model)
-    elif teacher_model.startswith("claude-"):
-        teacher_lm = dspy.Claude(model=teacher_model)
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 

@@ -89,7 +89,7 @@ with gr.Blocks() as iface:
 
         gr.Markdown("### Settings")
         with gr.Row():
-            model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini", "claude-3-sonnet", "claude-3-opus", "claude-3-haiku", "claude-3.5-sonnet"]
+            model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini"]
             llm_model = gr.Dropdown(
                 model_options,
                 label="Model",
