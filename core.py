@@ -6,7 +6,7 @@ import os
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, BootstrapFinetune
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, MIPROv2, COPRO, BootstrapFinetune
 from pydantic import create_model
 
 # when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
@@ -50,6 +50,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
+    elif llm_model.startswith("claude-"):
+        lm = dspy.Claude(model=llm_model)
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -62,6 +64,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the teacher model
     if teacher_model.startswith("gpt-"):
         teacher_lm = dspy.OpenAI(model=teacher_model)
+    elif teacher_model.startswith("claude-"):
+        teacher_lm = dspy.Claude(model=teacher_model)
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
@@ -113,14 +117,19 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     if optimizer == "BootstrapFewShot":
         teleprompter = BootstrapFewShot(metric=metric, teacher_settings=dict(lm=teacher_lm))
     elif optimizer == "BootstrapFewShotWithRandomSearch":
-        teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm))
-    # TODO: add the COPRO optimizer once I get it working
+        teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm), num_threads=1)
+    elif optimizer == "COPRO":
+        teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
     elif optimizer == "MIPRO":
-        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, requires_permission_to_run=False)
+        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
+    elif optimizer == "MIPROv2":
+        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
-    kwargs = dict(num_threads=4, display_progress=True, display_table=0)
+    # Use a single thread for evaluation
+    kwargs = dict(num_threads=1, display_progress=False, display_table=0)
+
     # Compile the program
     if optimizer == "MIPRO":
         num_trials = 10  # Adjust this value as needed
@@ -130,12 +139,28 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         compiled_program = teleprompter.compile(module, trainset=trainset, num_trials=num_trials,
     max_bootstrapped_demos=max_bootstrapped_demos,
     max_labeled_demos=max_labeled_demos,
-    eval_kwargs=kwargs)
+    eval_kwargs=kwargs, requires_permission_to_run=False)
+    elif optimizer == "MIPROv2":
+        num_batches = 30
+        max_bootstrapped_demos = 5
+        max_labeled_demos = 2
+        compiled_program = teleprompter.compile(
+            module,
+            trainset=trainset,
+            valset=devset,
+            num_batches=num_batches,
+            max_bootstrapped_demos=max_bootstrapped_demos,
+            max_labeled_demos=max_labeled_demos,
+            eval_kwargs=kwargs,
+            requires_permission_to_run=False
+        )
+    elif optimizer == "BootstrapFewShot":
+        compiled_program = teleprompter.compile(module, trainset=trainset)
     else:
         compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
 
     # Evaluate the compiled program
-    evaluate = Evaluate(metric=metric, devset=devset)
+    evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
     score = evaluate(compiled_program)
 
     # Generate a human-readable ID for the compiled program

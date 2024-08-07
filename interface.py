@@ -1,5 +1,7 @@
 import gradio as gr
 import pandas as pd
+import json
+import os
 
 from core import compile_program
 
@@ -89,7 +91,11 @@ with gr.Blocks() as iface:
 
         gr.Markdown("### Settings")
         with gr.Row():
-            model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini"]
+            model_options = [
+                "gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini",
+                "claude-3-5-sonnet-20240620", "claude-3-opus-20240229",
+                "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
+            ]
             llm_model = gr.Dropdown(
                 model_options,
                 label="Model",
@@ -110,10 +116,10 @@ with gr.Blocks() as iface:
             )
         with gr.Row():
             optimizer = gr.Dropdown(
-                ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO"],
+                ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
                 label="Optimizer",
                 value="BootstrapFewShot",
-                info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO (large, 300+) also optimizes the prompt instructions."
+                info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
             )
             metric_type = gr.Radio(
                 ["Exact Match", "LLM-as-a-Judge"],
@@ -230,7 +236,42 @@ with gr.Blocks() as iface:
             
             # Remove the evaluation score line from usage_instructions
             usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Evaluation score:")])
+
+            # Extract human-readable ID from usage_instructions
+            human_readable_id = None
+            for line in usage_instructions.split('\n'):
+                if "programs/" in line and ".json" in line:
+                    human_readable_id = line.split('programs/')[1].split('.json')[0]
+                    break
             
+            if human_readable_id is None:
+                raise ValueError("Could not extract human-readable ID from usage instructions")
+
+            # Save details to JSON
+            details = {
+                "input_fields": input_fields,
+                "output_fields": output_fields,
+                "dspy_module": data[dspy_module],
+                "llm_model": data[llm_model],
+                "teacher_model": data[teacher_model],
+                "optimizer": data[optimizer],
+                "instructions": data[instructions],
+                "signature": signature,
+                "evaluation_score": evaluation_score,
+                "optimized_prompt": optimized_prompt,
+                "usage_instructions": usage_instructions,
+                "example_data": data[example_data].to_dict(orient='records'),
+                "human_readable_id": human_readable_id
+            }
+            
+            # Create 'prompts' folder if it doesn't exist
+            if not os.path.exists('prompts'):
+                os.makedirs('prompts')
+            
+            # Save JSON file with human-readable ID
+            json_filename = f"prompts/{human_readable_id}.json"
+            with open(json_filename, 'w') as f:
+                json.dump(details, f, indent=4)
             return signature, evaluation_score, optimized_prompt, usage_instructions
 
         compile_button.click(
