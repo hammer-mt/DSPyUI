@@ -20,11 +20,6 @@ with gr.Blocks() as iface:
                 info="Provide clear and comprehensive instructions for the task. This will guide the DSPy program in understanding the specific requirements and expected outcomes."
             )
 
-        with gr.Column(scale=1):
-            # TODO: make this work with two variables (right now it doesn't add the second variable to the input_values)
-            load_example_btn = gr.Button("Load Example")
-            gr.Markdown("Click to load a pre-configured example for demonstration purposes.", elem_classes="small-text")
-    
     input_values = gr.State(["Input1"])
     output_values = gr.State(["Output1"])
 
@@ -278,35 +273,6 @@ with gr.Blocks() as iface:
             compile,
             inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),
             outputs=[signature, evaluation_score, optimized_prompt, usage_instructions]
-        )
-
-        def load_example():
-            df = pd.read_csv("example_data.csv")
-            input_fields = ["joke", "topic"]
-            output_fields = ["funny"]
-            task_description = "Determine if a given joke is funny based on its content and topic."
-            
-            return (
-                df,
-                gr.update(visible=True),
-                gr.update(visible=True),
-                gr.update(visible=True),
-                task_description,
-                *[gr.update(value=field) for field in input_fields],
-                *[gr.update(value=field) for field in output_fields]
-            )
-
-        load_example_btn.click(
-            load_example,
-            outputs=[
-                example_data,
-                example_data,
-                export_csv_btn,
-                compile_button,
-                instructions,
-                *inputs,
-                *outputs
-            ]
         )
 
 # Launch the interface
