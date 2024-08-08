@@ -22,10 +22,13 @@ def list_prompts():
                 prompt_id = file
                 signature = data.get('signature', 'N/A')
                 eval_score = data.get('evaluation_score', 'N/A')
+                # Exclude example data
+                details = {k: v for k, v in data.items() if k != 'example_data'}
                 prompt_details.append({
                     "ID": prompt_id,
                     "Signature": signature,
-                    "Eval Score": eval_score
+                    "Eval Score": eval_score,
+                    "Details": json.dumps(details, indent=4)  # Add full details as a JSON string
                 })
     
     return prompt_details  # Return the list of prompts as dictionaries
@@ -282,7 +285,6 @@ with gr.Blocks() as iface:
                         "evaluation_score": evaluation_score,
                         "optimized_prompt": optimized_prompt,
                         "usage_instructions": usage_instructions,
-                        "example_data": data[example_data].to_dict(orient='records'),
                         "human_readable_id": human_readable_id
                     }
                     
@@ -306,6 +308,13 @@ with gr.Blocks() as iface:
             gr.Markdown("# View Prompts")
             prompts = list_prompts()
             
+            selected_prompt_details = gr.Markdown()  # Placeholder for selected prompt details
+            
+            def show_prompt_details(prompt):
+                details = json.loads(prompt["Details"])
+                formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
+                return gr.update(value=formatted_details)
+            
             # Create rows with 4 columns each
             num_columns = 4
             for i in range(0, len(prompts), num_columns):
@@ -318,7 +327,15 @@ with gr.Blocks() as iface:
                                     gr.Markdown(f"**ID:** {prompt['ID']}")
                                     gr.Markdown(f"**Signature:** {prompt['Signature']}")
                                     gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
+                                    gr.Button("View Details").click(
+                                        show_prompt_details,
+                                        inputs=[gr.State(prompt)],
+                                        outputs=[selected_prompt_details]
+                                    )
                                     gr.Markdown("---")  # Add a horizontal line for separation
+
+            gr.Markdown("## Prompt Details")
+            selected_prompt_details  # Display the selected prompt details here
 
 # Launch the interface
 iface.launch()
