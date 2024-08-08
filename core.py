@@ -128,7 +128,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
     # Use a single thread for evaluation
-    kwargs = dict(num_threads=1, display_progress=False, display_table=0)
+    kwargs = dict(num_threads=1, display_progress=True, display_table=0)
 
     # Compile the program
     if optimizer == "MIPRO":
@@ -156,6 +156,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         )
     elif optimizer == "BootstrapFewShot":
         compiled_program = teleprompter.compile(module, trainset=trainset)
+    elif optimizer == "COPRO":
+        compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
     else:
         compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
 
