@@ -4,10 +4,20 @@ import re
 import datetime
 import os
 
+
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, MIPROv2, COPRO, BootstrapFinetune
 from pydantic import create_model
+
+# List of supported Groq models
+SUPPORTED_GROQ_MODELS = [
+    "mixtral-8x7b-32768",
+    "gemma-7b-it",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "gemma2-9b-it"
+]
 
 # when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
 lm = dspy.OpenAI(model="gpt-4o-mini")
@@ -52,6 +62,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         lm = dspy.OpenAI(model=llm_model)
     elif llm_model.startswith("claude-"):
         lm = dspy.Claude(model=llm_model)
+    elif llm_model in SUPPORTED_GROQ_MODELS:
+        lm = dspy.GROQ(model=llm_model, api_key=os.environ.get("GROQ_API_KEY"))
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -66,6 +78,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         teacher_lm = dspy.OpenAI(model=teacher_model)
     elif teacher_model.startswith("claude-"):
         teacher_lm = dspy.Claude(model=teacher_model)
+    elif teacher_model in SUPPORTED_GROQ_MODELS:
+        teacher_lm = dspy.GROQ(model=teacher_model, api_key=os.environ.get("GROQ_API_KEY"))
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
@@ -123,7 +137,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     elif optimizer == "MIPRO":
         teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
     elif optimizer == "MIPROv2":
-        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm)
+        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm))
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 

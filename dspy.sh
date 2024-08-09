@@ -43,9 +43,9 @@ else
 fi
 
 # Install required packages if not already installed
-if ! pip freeze | grep -q "gradio\|dspy\|pandas\|openai\|anthropic"; then
+if ! pip freeze | grep -q "gradio\|dspy\|pandas\|openai\|anthropic\|groq"; then
     echo "Installing required packages..."
-    pip install gradio dspy-ai pandas openai anthropic
+    pip install gradio dspy-ai pandas openai anthropic groq
 else
     echo "Required packages are already installed."
 fi

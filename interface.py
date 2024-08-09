@@ -120,6 +120,8 @@ with gr.Blocks() as iface:
                         "gpt-3.5-turbo", "gpt-4", "gpt-4o", "gpt-4o-mini",
                         "claude-3-5-sonnet-20240620", "claude-3-opus-20240229",
                         "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
+                        "mixtral-8x7b-32768", "gemma-7b-it", "llama3-70b-8192",
+                        "llama3-8b-8192", "gemma2-9b-it"
                     ]
                     llm_model = gr.Dropdown(
                         model_options,
