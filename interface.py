@@ -143,10 +143,10 @@ with gr.Blocks() as iface:
                     )
                 with gr.Row():
                     optimizer = gr.Dropdown(
-                        ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
+                        ["None", "BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
                         label="Optimizer",
-                        value="BootstrapFewShot",
-                        info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
+                        value="None",
+                        info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
                     )
                     metric_type = gr.Radio(
                         ["Exact Match", "LLM-as-a-Judge"],

@@ -165,3 +165,4 @@ local_cache/
 exported_data.csv
 testing.ipynb
 *.json
+.DS_Store

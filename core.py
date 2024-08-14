@@ -128,33 +128,29 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         return int(all(gold[field] == pred[field] for field in output_fields))
 
     # Set up the optimizer
-    if optimizer == "BootstrapFewShot":
+    if optimizer == "None":
+        # Skip compilation, use the module as-is
+        compiled_program = module
+    elif optimizer == "BootstrapFewShot":
         teleprompter = BootstrapFewShot(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        compiled_program = teleprompter.compile(module, trainset=trainset)
     elif optimizer == "BootstrapFewShotWithRandomSearch":
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm), num_threads=1)
+        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     elif optimizer == "COPRO":
         teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     elif optimizer == "MIPRO":
         teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
-    elif optimizer == "MIPROv2":
-        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm))
-    else:
-        raise ValueError(f"Unsupported optimizer: {optimizer}")
-
-    # Use a single thread for evaluation
-    kwargs = dict(num_threads=1, display_progress=False, display_table=0)
-
-    # Compile the program
-    if optimizer == "MIPRO":
         num_trials = 10  # Adjust this value as needed
         max_bootstrapped_demos = 5  # Adjust this value as needed
         max_labeled_demos = 5  # Adjust this value as needed
-
         compiled_program = teleprompter.compile(module, trainset=trainset, num_trials=num_trials,
-    max_bootstrapped_demos=max_bootstrapped_demos,
-    max_labeled_demos=max_labeled_demos,
-    eval_kwargs=kwargs, requires_permission_to_run=False)
+            max_bootstrapped_demos=max_bootstrapped_demos,
+            max_labeled_demos=max_labeled_demos,
+            eval_kwargs=kwargs, requires_permission_to_run=False)
     elif optimizer == "MIPROv2":
+        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm))
         num_batches = 30
         max_bootstrapped_demos = 5
         max_labeled_demos = 2
@@ -168,10 +164,11 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
             eval_kwargs=kwargs,
             requires_permission_to_run=False
         )
-    elif optimizer == "BootstrapFewShot":
-        compiled_program = teleprompter.compile(module, trainset=trainset)
     else:
-        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
+        raise ValueError(f"Unsupported optimizer: {optimizer}")
+
+    # Use a single thread for evaluation
+    kwargs = dict(num_threads=1, display_progress=False, display_table=0)
 
     # Evaluate the compiled program
     evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
