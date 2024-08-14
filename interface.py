@@ -145,7 +145,7 @@ with gr.Blocks() as iface:
                     optimizer = gr.Dropdown(
                         ["None", "BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
                         label="Optimizer",
-                        value="None",
+                        value="BootstrapFewShot",
                         info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
                     )
                     metric_type = gr.Radio(
