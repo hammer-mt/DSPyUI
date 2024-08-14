@@ -2,6 +2,7 @@ import gradio as gr
 import pandas as pd
 import json
 import os
+import glob
 
 from core import compile_program
 
@@ -15,7 +16,6 @@ def list_prompts():
     
     prompt_details = []
     for file in files:
-        print("file: ", file)
         if file.endswith('.json'):
             with open(os.path.join('prompts', file), 'r') as f:
                 data = json.load(f)
@@ -32,6 +32,19 @@ def list_prompts():
                 })
     
     return prompt_details  # Return the list of prompts as dictionaries
+
+# Function to get available prompts for LLM-as-a-Judge
+def get_available_prompts():
+    prompt_files = glob.glob('prompts/*.json')
+    prompts = []
+    for file in prompt_files:
+        with open(file, 'r') as f:
+            data = json.load(f)
+            prompts.append({
+                "id": os.path.basename(file).split('.')[0],
+                "signature": data.get('signature', 'N/A')
+            })
+    return prompts
 
 # Gradio interface
 with gr.Blocks() as iface:
@@ -154,6 +167,25 @@ with gr.Blocks() as iface:
                         value="Exact Match",
                         info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Note: you must have another compiled program (typically a program trained on a classification task) to use LLM-as-a-Judge."
                     )
+                    judge_prompt = gr.Dropdown(
+                        choices=[],
+                        label="Judge Prompt",
+                        visible=False,
+                        info="Select the prompt to use as the judge for evaluation."
+                    )
+
+                def update_judge_prompt_visibility(metric):
+                    if metric == "LLM-as-a-Judge":
+                        prompts = get_available_prompts()
+                        return gr.update(visible=True, choices=[f"{p['id']} - {p['signature']}" for p in prompts])
+                    else:
+                        return gr.update(visible=False, choices=[])
+
+                metric_type.change(
+                    update_judge_prompt_visibility,
+                    inputs=[metric_type],
+                    outputs=[judge_prompt]
+                )
 
                 gr.Markdown("### Data")
                 with gr.Column():
@@ -244,6 +276,13 @@ with gr.Blocks() as iface:
                     input_fields = [data[input] for input in inputs if data[input].strip()]
                     output_fields = [data[output] for output in outputs if data[output].strip()]
 
+                    # Load the judge prompt if LLM-as-a-Judge is selected
+                    judge_prompt_data = None
+                    if data[metric_type] == "LLM-as-a-Judge":
+                        judge_prompt_id = data[judge_prompt].split(' - ')[0]
+                        with open(f'prompts/{judge_prompt_id}.json', 'r') as f:
+                            judge_prompt_data = json.load(f)
+
                     usage_instructions, optimized_prompt = compile_program(
                         input_fields,
                         output_fields,
@@ -252,7 +291,9 @@ with gr.Blocks() as iface:
                         data[teacher_model],
                         data[example_data],
                         data[optimizer],
-                        data[instructions]
+                        data[instructions],
+                        data[metric_type],
+                        judge_prompt_data
                     )
                     
                     signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
@@ -302,7 +343,7 @@ with gr.Blocks() as iface:
 
                 compile_button.click(
                     compile,
-                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions]),
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt]),
                     outputs=[signature, evaluation_score, optimized_prompt, usage_instructions]
                 )
 

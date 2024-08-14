@@ -56,7 +56,7 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_data=None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
@@ -123,9 +123,21 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     split_index = int(0.8 * len(dataset))
     trainset, devset = dataset[:split_index], dataset[split_index:]
 
-    # Set up the metric (always using Exact Match as per the updated interface)
-    def metric(gold, pred, trace=None):
-        return int(all(gold[field] == pred[field] for field in output_fields))
+    # Set up the evaluation metric
+    if metric_type == "Exact Match":
+        def metric(gold, pred, trace=None):
+            return int(all(gold[field] == pred[field] for field in output_fields))
+    elif metric_type == "LLM-as-a-Judge":
+        if judge_prompt_data is None:
+            raise ValueError("Judge prompt data is required for LLM-as-a-Judge metric")
+        
+        judge_module = create_judge_from_prompt(judge_prompt_data)
+        
+        def metric(gold, pred, trace=None):
+            result = judge_module(gold, pred)
+            return result.score  # Return just the score for the metric
+    else:
+        raise ValueError(f"Unknown metric type: {metric_type}")
 
     # Set up the optimizer
     if optimizer == "None":
@@ -207,3 +219,78 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         usage_instructions += example_output
 
     return usage_instructions, final_prompt
+
+def create_judge_from_prompt(prompt_data):
+    # Extract the signature and prompt from the prompt_data
+    input_fields = prompt_data.get('input_fields', [])
+    output_fields = prompt_data.get('output_fields', [])
+    instructions = prompt_data.get('instructions', '')
+    prompt_template = prompt_data.get('prompt_template', '')
+
+    # Create a custom signature for the judge
+    JudgeSignature = create_custom_signature(
+        input_fields + ['gold_output', 'predicted_output'],
+        ['score', 'explanation'],
+        instructions
+    )
+
+    class Judge(dspy.Signature):
+        """
+        Evaluate the quality of the predicted output compared to the gold output.
+        
+        {instructions}
+        
+        Input:
+        {input_description}
+        gold_output: The correct output
+        predicted_output: The output to be evaluated
+
+        Output:
+        score: A float between 0 and 1, where 1 is a perfect match
+        explanation: A brief explanation of the score
+        """
+
+        input_data = dspy.InputField()  # Changed from input_fields to input_data
+        gold_output = dspy.InputField()
+        predicted_output = dspy.InputField()
+        score = dspy.OutputField(desc="A float between 0 and 1, where 1 is a perfect match")
+        explanation = dspy.OutputField(desc="A brief explanation of the score")
+
+    Judge.__doc__ = Judge.__doc__.format(
+        instructions=instructions,
+        input_description='\n'.join(f'{field}: {prompt_data.get("field_descriptions", {}).get(field, "Input field")}' for field in input_fields)
+    )
+
+    class JudgeModule(dspy.Module):
+        def __init__(self, prompt_template):
+            super().__init__()
+            self.judge = dspy.Predict(Judge)
+            self.prompt_template = prompt_template
+
+        def forward(self, gold, pred):
+            # Prepare the input for the judge
+            judge_input = {
+                'input_data': {field: gold[field] for field in input_fields},  # Changed from input_fields to input_data
+                'gold_output': {field: gold[field] for field in output_fields},
+                'predicted_output': {field: pred[field] for field in output_fields}
+            }
+
+            # Use the prompt template to format the input
+            formatted_input = self.prompt_template.format(**judge_input)
+
+            # Call the judge with the formatted input
+            result = self.judge(
+                input_data=formatted_input,  # Changed from input_fields to input_data
+                gold_output=str(judge_input['gold_output']),
+                predicted_output=str(judge_input['predicted_output'])
+            )
+
+            # Convert the score to a float
+            try:
+                score = float(result.score)
+            except ValueError:
+                score = 0.0  # Default to 0 if conversion fails
+
+            return dspy.Prediction(score=score, explanation=result.explanation)
+
+    return JudgeModule(prompt_template)
