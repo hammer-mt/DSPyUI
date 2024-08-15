@@ -164,7 +164,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         if not os.path.exists(judge_program_path):
             raise ValueError(f"Judge program not found: {judge_program_path}")
         
-        # Load the judge prompt details to check input/output compatibility
+        # Load the judge prompt details
         with open(f"prompts/{judge_prompt_id}.json", 'r') as f:
             judge_prompt_details = json.load(f)
         
@@ -179,28 +179,46 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         print("Judge Output Fields:")
         print(judge_output_fields)
         
-        if set(input_fields + output_fields) != set(judge_input_fields):
-            raise ValueError("Judge program input/output fields do not match the current program")
-        
         # Load the compiled judge program
         judge_program = dspy.Predict(dspy.Signature)
         judge_program.load(judge_program_path)
         
         def metric(gold, pred, trace=None):
-            # Prepare input for the judge program
-            judge_input = {**gold, **pred}
-            
-            print("Judge Input Prepared:")
-            print(judge_input)
-            
-            # Run the judge program
-            result = judge_program(**judge_input)
-            
-            print("Judge Program Result:")
-            print(result)
-            
-            # Return the score
-            return float(result.score)
+            try:
+                # Prepare input for the judge program based on judge_input_fields
+                judge_input = {}
+                for field in judge_input_fields:
+                    if field in gold:
+                        judge_input[field] = gold[field]
+                    elif field in pred:
+                        judge_input[field] = pred[field]
+                    else:
+                        print(f"Warning: Required judge input field '{field}' not found in gold or pred")
+                        judge_input[field] = ""  # or some default value
+                
+                print("Judge Input Prepared:")
+                print(judge_input)
+                
+                # Run the judge program
+                result = judge_program(**judge_input)
+                
+                print("Judge Program Result:")
+                print(result)
+                
+                # Extract the score from the judge output
+                if len(judge_output_fields) == 1:
+                    score_field = judge_output_fields[0]
+                    if hasattr(result, score_field):
+                        return float(getattr(result, score_field))
+                    else:
+                        print(f"Warning: Judge program did not return expected field '{score_field}'")
+                        return 0.0
+                else:
+                    print("Warning: Multiple or no output fields in judge program. Using first field as score.")
+                    return float(getattr(result, judge_output_fields[0], 0.0))
+            except Exception as e:
+                print(f"Error in metric function: {str(e)}")
+                return 0.0  # Return a default score in case of error
     else:
         raise ValueError(f"Unknown metric type: {metric_type}")
 

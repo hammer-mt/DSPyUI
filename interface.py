@@ -161,18 +161,19 @@ with gr.Blocks() as iface:
                         value="BootstrapFewShot",
                         info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
                     )
-                    metric_type = gr.Radio(
-                        ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
-                        label="Metric",
-                        value="Exact Match",
-                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer."
-                    )
-                    judge_prompt = gr.Dropdown(
-                        choices=[],
-                        label="Judge Prompt",
-                        visible=False,
-                        info="Select the prompt to use as the judge for evaluation."
-                    )
+                    with gr.Column():
+                        metric_type = gr.Radio(
+                            ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
+                            label="Metric",
+                            value="Exact Match",
+                            info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer."
+                        )
+                        judge_prompt = gr.Dropdown(
+                            choices=[],
+                            label="Judge Prompt",
+                            visible=False,
+                            info="Select the prompt to use as the judge for evaluation."
+                        )
 
                 def update_judge_prompt_visibility(metric):
                     if metric == "LLM-as-a-Judge":
