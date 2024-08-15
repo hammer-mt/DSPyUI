@@ -3,7 +3,10 @@ import pandas as pd
 import re
 import datetime
 import os
-
+import json
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from openai import OpenAI
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
@@ -56,7 +59,7 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_data=None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
@@ -114,6 +117,10 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Convert DataFrame to list of dictionaries
     example_data_list = example_data.to_dict('records')
 
+    # Check if there are at least two examples
+    if len(example_data_list) < 2:
+        raise ValueError("At least two examples are required for compilation.")
+
     # Create dataset with correct field names and convert 'funny' to string
     dataset = [dspy.Example(**{input_fields[i]: example[input_fields[i]] for i in range(len(input_fields))},
                             **{output_fields[i]: str(example[output_fields[i]]) for i in range(len(output_fields))}).with_inputs(*input_fields)
@@ -127,15 +134,73 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     if metric_type == "Exact Match":
         def metric(gold, pred, trace=None):
             return int(all(gold[field] == pred[field] for field in output_fields))
+    elif metric_type == "Cosine Similarity":
+        # Initialize the OpenAI client
+        client = OpenAI()
+
+        def get_embedding(text):
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            return response.data[0].embedding
+
+        def cosine_similarity(a, b):
+            return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+        def metric(gold, pred, trace=None):
+            gold_vector = np.concatenate([get_embedding(str(gold[field])) for field in output_fields])
+            pred_vector = np.concatenate([get_embedding(str(pred[field])) for field in output_fields])
+            
+            similarity = cosine_similarity(gold_vector, pred_vector)
+
+            return similarity
     elif metric_type == "LLM-as-a-Judge":
-        if judge_prompt_data is None:
-            raise ValueError("Judge prompt data is required for LLM-as-a-Judge metric")
+        if judge_prompt_id is None:
+            raise ValueError("Judge prompt ID is required for LLM-as-a-Judge metric")
         
-        judge_module = create_judge_from_prompt(judge_prompt_data)
+        # Load the compiled judge program
+        judge_program_path = f"programs/{judge_prompt_id}.json"
+        if not os.path.exists(judge_program_path):
+            raise ValueError(f"Judge program not found: {judge_program_path}")
+        
+        # Load the judge prompt details to check input/output compatibility
+        with open(f"prompts/{judge_prompt_id}.json", 'r') as f:
+            judge_prompt_details = json.load(f)
+        
+        judge_input_fields = judge_prompt_details.get('input_fields', [])
+        judge_output_fields = judge_prompt_details.get('output_fields', [])
+
+        print("Judge Prompt Details Loaded:")
+        print(judge_prompt_details)
+        
+        print("Judge Input Fields:")
+        print(judge_input_fields)
+        print("Judge Output Fields:")
+        print(judge_output_fields)
+        
+        if set(input_fields + output_fields) != set(judge_input_fields):
+            raise ValueError("Judge program input/output fields do not match the current program")
+        
+        # Load the compiled judge program
+        judge_program = dspy.Predict(dspy.Signature)
+        judge_program.load(judge_program_path)
         
         def metric(gold, pred, trace=None):
-            result = judge_module(gold, pred)
-            return result.score  # Return just the score for the metric
+            # Prepare input for the judge program
+            judge_input = {**gold, **pred}
+            
+            print("Judge Input Prepared:")
+            print(judge_input)
+            
+            # Run the judge program
+            result = judge_program(**judge_input)
+            
+            print("Judge Program Result:")
+            print(result)
+            
+            # Return the score
+            return float(result.score)
     else:
         raise ValueError(f"Unknown metric type: {metric_type}")
 
@@ -180,11 +245,14 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
     # Use a single thread for evaluation
-    kwargs = dict(num_threads=1, display_progress=False, display_table=0)
+    kwargs = dict(num_threads=1, display_progress=True, display_table=1)
 
     # Evaluate the compiled program
     evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
     score = evaluate(compiled_program)
+
+    print("Evaluation Score:")
+    print(score)
 
     # Generate a human-readable ID for the compiled program
     human_readable_id = generate_human_readable_id(input_fields, output_fields, dspy_module, llm_model, teacher_model, optimizer, instructions)
@@ -219,78 +287,3 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         usage_instructions += example_output
 
     return usage_instructions, final_prompt
-
-def create_judge_from_prompt(prompt_data):
-    # Extract the signature and prompt from the prompt_data
-    input_fields = prompt_data.get('input_fields', [])
-    output_fields = prompt_data.get('output_fields', [])
-    instructions = prompt_data.get('instructions', '')
-    prompt_template = prompt_data.get('prompt_template', '')
-
-    # Create a custom signature for the judge
-    JudgeSignature = create_custom_signature(
-        input_fields + ['gold_output', 'predicted_output'],
-        ['score', 'explanation'],
-        instructions
-    )
-
-    class Judge(dspy.Signature):
-        """
-        Evaluate the quality of the predicted output compared to the gold output.
-        
-        {instructions}
-        
-        Input:
-        {input_description}
-        gold_output: The correct output
-        predicted_output: The output to be evaluated
-
-        Output:
-        score: A float between 0 and 1, where 1 is a perfect match
-        explanation: A brief explanation of the score
-        """
-
-        input_data = dspy.InputField()  # Changed from input_fields to input_data
-        gold_output = dspy.InputField()
-        predicted_output = dspy.InputField()
-        score = dspy.OutputField(desc="A float between 0 and 1, where 1 is a perfect match")
-        explanation = dspy.OutputField(desc="A brief explanation of the score")
-
-    Judge.__doc__ = Judge.__doc__.format(
-        instructions=instructions,
-        input_description='\n'.join(f'{field}: {prompt_data.get("field_descriptions", {}).get(field, "Input field")}' for field in input_fields)
-    )
-
-    class JudgeModule(dspy.Module):
-        def __init__(self, prompt_template):
-            super().__init__()
-            self.judge = dspy.Predict(Judge)
-            self.prompt_template = prompt_template
-
-        def forward(self, gold, pred):
-            # Prepare the input for the judge
-            judge_input = {
-                'input_data': {field: gold[field] for field in input_fields},  # Changed from input_fields to input_data
-                'gold_output': {field: gold[field] for field in output_fields},
-                'predicted_output': {field: pred[field] for field in output_fields}
-            }
-
-            # Use the prompt template to format the input
-            formatted_input = self.prompt_template.format(**judge_input)
-
-            # Call the judge with the formatted input
-            result = self.judge(
-                input_data=formatted_input,  # Changed from input_fields to input_data
-                gold_output=str(judge_input['gold_output']),
-                predicted_output=str(judge_input['predicted_output'])
-            )
-
-            # Convert the score to a float
-            try:
-                score = float(result.score)
-            except ValueError:
-                score = 0.0  # Default to 0 if conversion fails
-
-            return dspy.Prediction(score=score, explanation=result.explanation)
-
-    return JudgeModule(prompt_template)

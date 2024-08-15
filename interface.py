@@ -35,9 +35,9 @@ def list_prompts():
 
 # Function to get available prompts for LLM-as-a-Judge
 def get_available_prompts():
-    prompt_files = glob.glob('prompts/*.json')
+    program_files = glob.glob('programs/*.json')
     prompts = []
-    for file in prompt_files:
+    for file in program_files:
         with open(file, 'r') as f:
             data = json.load(f)
             prompts.append({
@@ -162,10 +162,10 @@ with gr.Blocks() as iface:
                         info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
                     )
                     metric_type = gr.Radio(
-                        ["Exact Match", "LLM-as-a-Judge"],
+                        ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
                         label="Metric",
                         value="Exact Match",
-                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Note: you must have another compiled program (typically a program trained on a classification task) to use LLM-as-a-Judge."
+                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer."
                     )
                     judge_prompt = gr.Dropdown(
                         choices=[],
@@ -276,12 +276,10 @@ with gr.Blocks() as iface:
                     input_fields = [data[input] for input in inputs if data[input].strip()]
                     output_fields = [data[output] for output in outputs if data[output].strip()]
 
-                    # Load the judge prompt if LLM-as-a-Judge is selected
-                    judge_prompt_data = None
+                    # Get the judge prompt ID if LLM-as-a-Judge is selected
+                    judge_prompt_id = None
                     if data[metric_type] == "LLM-as-a-Judge":
                         judge_prompt_id = data[judge_prompt].split(' - ')[0]
-                        with open(f'prompts/{judge_prompt_id}.json', 'r') as f:
-                            judge_prompt_data = json.load(f)
 
                     usage_instructions, optimized_prompt = compile_program(
                         input_fields,
@@ -293,7 +291,7 @@ with gr.Blocks() as iface:
                         data[optimizer],
                         data[instructions],
                         data[metric_type],
-                        judge_prompt_data
+                        judge_prompt_id
                     )
                     
                     signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
