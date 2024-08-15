@@ -34,7 +34,6 @@ def list_prompts():
     return prompt_details  # Return the list of prompts as dictionaries
 
 # Function to get available prompts for LLM-as-a-Judge
-# Function to get available prompts for LLM-as-a-Judge
 def get_available_prompts():
     prompt_files = glob.glob('prompts/*.json')
     prompts = []
@@ -109,26 +108,58 @@ with gr.Blocks() as iface:
                     with gr.Column():
                         for i, input_value in enumerate(input_values):
                             with gr.Group():
-                                input = gr.Textbox(
-                                    placeholder=input_value,
-                                    key=f"input-{i}",
+                                with gr.Row():
+                                    input_name = gr.Textbox(
+                                        placeholder=input_value,
+                                        key=f"input-name-{i}",
+                                        show_label=False,
+                                        label=f"Input {i+1} Name",
+                                        info="Specify the name of this input field.",
+                                        scale=10
+                                    )
+                                    expand_btn = gr.Button("▼", size="sm", scale=1)
+                                input_desc = gr.Textbox(
+                                    placeholder="Description (optional)",
+                                    key=f"input-desc-{i}",
                                     show_label=False,
-                                    label=f"Input {i+1}",
-                                    info="Specify the name and description of this input field."
+                                    label=f"Input {i+1} Description",
+                                    info="Optionally provide a description for this input field.",
+                                    visible=False
                                 )
-                                inputs.append(input)
+                                expand_btn.click(
+                                    lambda: gr.update(visible=True),
+                                    outputs=[input_desc]
+                                )
+                                inputs.append(input_name)
+                                inputs.append(input_desc)
                     
                     with gr.Column():
                         for i, output_value in enumerate(output_values):
                             with gr.Group():
-                                output = gr.Textbox(
-                                    placeholder=output_value,
-                                    key=f"output-{i}",
+                                with gr.Row():
+                                    output_name = gr.Textbox(
+                                        placeholder=output_value,
+                                        key=f"output-name-{i}",
+                                        show_label=False,
+                                        label=f"Output {i+1} Name",
+                                        info="Specify the name of this output field.",
+                                        scale=10
+                                    )
+                                    expand_btn = gr.Button("▼", size="sm", scale=1)
+                                output_desc = gr.Textbox(
+                                    placeholder="Description (optional)",
+                                    key=f"output-desc-{i}",
                                     show_label=False,
-                                    label=f"Output {i+1}",
-                                    info="Specify the name and description of this output field."
+                                    label=f"Output {i+1} Description",
+                                    info="Optionally provide a description for this output field.",
+                                    visible=False
                                 )
-                                outputs.append(output)
+                                expand_btn.click(
+                                    lambda: gr.update(visible=True),
+                                    outputs=[output_desc]
+                                )
+                                outputs.append(output_name)
+                                outputs.append(output_desc)
 
                 gr.Markdown("### Settings")
                 with gr.Row():
@@ -277,8 +308,20 @@ with gr.Blocks() as iface:
                 )
 
                 def compile(data):
-                    input_fields = [data[input] for input in inputs if data[input].strip()]
-                    output_fields = [data[output] for output in outputs if data[output].strip()]
+                    input_fields = []
+                    input_descs = []
+                    output_fields = []
+                    output_descs = []
+                    
+                    for i in range(0, len(inputs), 2):
+                        if data[inputs[i]].strip():
+                            input_fields.append(data[inputs[i]])
+                            input_descs.append(data[inputs[i+1]] if data[inputs[i+1]].strip() else None)
+                    
+                    for i in range(0, len(outputs), 2):
+                        if data[outputs[i]].strip():
+                            output_fields.append(data[outputs[i]])
+                            output_descs.append(data[outputs[i+1]] if data[outputs[i+1]].strip() else None)
 
                     # Get the judge prompt ID if LLM-as-a-Judge is selected
                     judge_prompt_id = None
@@ -295,7 +338,9 @@ with gr.Blocks() as iface:
                         data[optimizer],
                         data[instructions],
                         data[metric_type],
-                        judge_prompt_id
+                        judge_prompt_id,
+                        input_descs,
+                        output_descs
                     )
                     
                     signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
@@ -360,8 +405,8 @@ with gr.Blocks() as iface:
                 formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
                 return gr.update(value=formatted_details)
             
-            # Create rows with 4 columns each
-            num_columns = 4
+            # Create rows with 3 columns each
+            num_columns = 3
             for i in range(0, len(prompts), num_columns):
                 with gr.Row():
                     for j in range(num_columns):

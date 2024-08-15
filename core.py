@@ -26,9 +26,15 @@ SUPPORTED_GROQ_MODELS = [
 lm = dspy.OpenAI(model="gpt-4o-mini")
 dspy.configure(lm=lm)
 
-def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str):
-    fields = {field: (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"})) for field in input_fields}
-    fields.update({field: (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"})) for field in output_fields})
+def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str, input_descs: List[str], output_descs: List[str]):
+    fields = {}
+    for i, field in enumerate(input_fields):
+        desc = input_descs[i] if i < len(input_descs) and input_descs[i] else None
+        fields[field] = (str, dspy.InputField(default=..., desc=desc, json_schema_extra={"__dspy_field_type": "input"}))
+    
+    for i, field in enumerate(output_fields):
+        desc = output_descs[i] if i < len(output_descs) and output_descs[i] else None
+        fields[field] = (str, dspy.OutputField(default=..., desc=desc, json_schema_extra={"__dspy_field_type": "output"}))
     
     CustomSignatureModel = create_model('CustomSignatureModel', **fields)
     
@@ -84,7 +90,7 @@ def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
@@ -112,7 +118,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
     # Create the custom signature
-    CustomSignature = create_custom_signature(input_fields, output_fields, instructions)
+    CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs or [], output_descs or [])
 
     # Create the DSPy module using the new function
     module = create_dspy_module(dspy_module, CustomSignature)
@@ -162,32 +168,46 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         if judge_prompt_id is None:
             raise ValueError("Judge prompt ID is required for LLM-as-a-Judge metric")
         
-        # Load the compiled judge program
-        judge_program_path = f"programs/{judge_prompt_id}.json"
-        if not os.path.exists(judge_program_path):
-            raise ValueError(f"Judge program not found: {judge_program_path}")
-        
         # Load the judge prompt details
-        with open(f"prompts/{judge_prompt_id}.json", 'r') as f:
+        judge_prompt_path = f"prompts/{judge_prompt_id}.json"
+        if not os.path.exists(judge_prompt_path):
+            raise ValueError(f"Judge prompt not found: {judge_prompt_path}")
+        
+        with open(judge_prompt_path, 'r') as f:
             judge_prompt_details = json.load(f)
         
         judge_input_fields = judge_prompt_details.get('input_fields', [])
         judge_output_fields = judge_prompt_details.get('output_fields', [])
-        judge_module = judge_prompt_details.get('dspy_module', 'Predict')  # Default to 'Predict' if not specified
+        judge_module = judge_prompt_details.get('dspy_module', 'Predict')
+        judge_instructions = judge_prompt_details.get('instructions', '')
+        judge_human_readable_id = judge_prompt_details.get('human_readable_id')
 
-        print("Judge Prompt Details Loaded:")
-        print(judge_prompt_details)
+        print("Judge Prompt Details:")
+        print(json.dumps(judge_prompt_details, indent=2))
         
-        print("Judge Input Fields:")
-        print(judge_input_fields)
-        print("Judge Output Fields:")
-        print(judge_output_fields)
+        # Create the custom signature for the judge program
+        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields, judge_instructions, [], [])
         
-        # Recreate the custom signature for the judge program
-        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields, judge_prompt_details.get('instructions', ''))
+        print("\nJudge Signature:")
+        print(JudgeSignature)
+        
+        # Create the judge program
+        judge_program = create_dspy_module(judge_module, JudgeSignature)
+        
+        print("\nJudge Program:")
+        print(judge_program)
         
         # Load the compiled judge program
-        judge_program = create_dspy_module(judge_module, JudgeSignature)
+        judge_program_path = f"programs/{judge_human_readable_id}.json"
+        if not os.path.exists(judge_program_path):
+            raise ValueError(f"Compiled judge program not found: {judge_program_path}")
+        
+        with open(judge_program_path, 'r') as f:
+            judge_program_content = json.load(f)
+        
+        print("\nCompiled Judge Program Content:")
+        print(json.dumps(judge_program_content, indent=2))
+        
         judge_program.load(judge_program_path)
         
         def metric(gold, pred, trace=None):
@@ -203,26 +223,41 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
                         print(f"Warning: Required judge input field '{field}' not found in gold or pred")
                         judge_input[field] = ""  # or some default value
                 
-                print("Judge Input Prepared:")
-                print(judge_input)
+                print("Judge Input:")
+                print(json.dumps(judge_input, indent=2))
                 
                 # Run the judge program
                 result = judge_program(**judge_input)
                 
                 print("Judge Program Result:")
                 print(result)
+                print("Result type:", type(result))
+                print("Result attributes:", dir(result))
+                if hasattr(result, 'toDict'):
+                    print("Result as dict:", result.toDict())
                 
                 # Extract the score from the judge output
                 if len(judge_output_fields) == 1:
                     score_field = judge_output_fields[0]
                     if hasattr(result, score_field):
-                        return float(getattr(result, score_field))
+                        score = getattr(result, score_field)
+                        print(f"Score: {score}")
+                        return float(score)
                     else:
-                        print(f"Warning: Judge program did not return expected field '{score_field}'")
-                        return 0.0
+                        # If the score field is not directly accessible, try to access it from the result dictionary
+                        result_dict = result.toDict() if hasattr(result, 'toDict') else {}
+                        if score_field in result_dict:
+                            score = result_dict[score_field]
+                            print(f"Score: {score}")
+                            return float(score)
+                        else:
+                            print(f"Error: Judge program did not return expected field '{score_field}'")
+                            print(f"Available fields: {result_dict.keys() if result_dict else dir(result)}")
+                            return 0.0
                 else:
-                    print("Warning: Multiple or no output fields in judge program. Using first field as score.")
-                    return float(getattr(result, judge_output_fields[0], 0.0))
+                    print(f"Error: Expected 1 output field, got {len(judge_output_fields)}")
+                    print(f"Output fields: {judge_output_fields}")
+                    return 0.0
             except Exception as e:
                 print(f"Error in metric function: {str(e)}")
                 return 0.0  # Return a default score in case of error
