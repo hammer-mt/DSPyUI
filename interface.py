@@ -34,17 +34,20 @@ def list_prompts():
     return prompt_details  # Return the list of prompts as dictionaries
 
 # Function to get available prompts for LLM-as-a-Judge
+# Function to get available prompts for LLM-as-a-Judge
 def get_available_prompts():
-    program_files = glob.glob('programs/*.json')
+    prompt_files = glob.glob('prompts/*.json')
     prompts = []
-    for file in program_files:
+    for file in prompt_files:
         with open(file, 'r') as f:
             data = json.load(f)
             prompts.append({
                 "id": os.path.basename(file).split('.')[0],
-                "signature": data.get('signature', 'N/A')
+                "signature": data.get('signature', 'N/A'),
+                "eval_score": data.get('evaluation_score', 'N/A')
             })
     return prompts
+
 
 # Gradio interface
 with gr.Blocks() as iface:
@@ -178,7 +181,7 @@ with gr.Blocks() as iface:
                 def update_judge_prompt_visibility(metric):
                     if metric == "LLM-as-a-Judge":
                         prompts = get_available_prompts()
-                        return gr.update(visible=True, choices=[f"{p['id']} - {p['signature']}" for p in prompts])
+                        return gr.update(visible=True, choices=[f"{p['id']} - {p['signature']} (Score: {p['eval_score']})" for p in prompts])
                     else:
                         return gr.update(visible=False, choices=[])
 

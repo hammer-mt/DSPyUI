@@ -59,6 +59,31 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
+def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
+    if dspy_module == "Predict":
+        class CustomPredictModule(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.predictor = dspy.Predict(CustomSignature)
+            
+            def forward(self, **kwargs):
+                result = self.predictor(**kwargs)
+                return dspy.Prediction(**{field: getattr(result, field) for field in CustomSignature.__annotations__ if field not in CustomSignature.__fields_set__})
+        
+        return CustomPredictModule()
+    elif dspy_module == "ChainOfThought":
+        class CustomChainOfThoughtModule(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.cot = dspy.ChainOfThought(CustomSignature)
+            
+            def forward(self, **kwargs):
+                return self.cot(**kwargs)
+        
+        return CustomChainOfThoughtModule()
+    else:
+        raise ValueError(f"Unsupported DSPy module: {dspy_module}")
+
 def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
@@ -89,30 +114,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Create the custom signature
     CustomSignature = create_custom_signature(input_fields, output_fields, instructions)
 
-    # Create the DSPy module
-    if dspy_module == "Predict":
-        class CustomPredictModule(dspy.Module):
-            def __init__(self):
-                super().__init__()
-                self.predictor = dspy.Predict(CustomSignature)
-            
-            def forward(self, **kwargs):
-                result = self.predictor(**kwargs)
-                return dspy.Prediction(**{field: getattr(result, field) for field in output_fields})
-        
-        module = CustomPredictModule()
-    elif dspy_module == "ChainOfThought":
-        class CustomChainOfThoughtModule(dspy.Module):
-            def __init__(self):
-                super().__init__()
-                self.cot = dspy.ChainOfThought(CustomSignature)
-            
-            def forward(self, **kwargs):
-                return self.cot(**kwargs)
-        
-        module = CustomChainOfThoughtModule()
-    else:
-        raise ValueError(f"Unsupported DSPy module: {dspy_module}")
+    # Create the DSPy module using the new function
+    module = create_dspy_module(dspy_module, CustomSignature)
 
     # Convert DataFrame to list of dictionaries
     example_data_list = example_data.to_dict('records')
@@ -170,6 +173,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         
         judge_input_fields = judge_prompt_details.get('input_fields', [])
         judge_output_fields = judge_prompt_details.get('output_fields', [])
+        judge_module = judge_prompt_details.get('dspy_module', 'Predict')  # Default to 'Predict' if not specified
 
         print("Judge Prompt Details Loaded:")
         print(judge_prompt_details)
@@ -179,8 +183,11 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         print("Judge Output Fields:")
         print(judge_output_fields)
         
+        # Recreate the custom signature for the judge program
+        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields, judge_prompt_details.get('instructions', ''))
+        
         # Load the compiled judge program
-        judge_program = dspy.Predict(dspy.Signature)
+        judge_program = create_dspy_module(judge_module, JudgeSignature)
         judge_program.load(judge_program_path)
         
         def metric(gold, pred, trace=None):
