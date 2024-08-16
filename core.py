@@ -5,7 +5,6 @@ import datetime
 import os
 import json
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
 from typing import List, Dict, Any

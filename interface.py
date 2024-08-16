@@ -126,12 +126,13 @@ with gr.Blocks() as iface:
                                     info="Optionally provide a description for this input field.",
                                     visible=False
                                 )
+                                desc_visible = gr.State(False)
                                 expand_btn.click(
-                                    lambda: gr.update(visible=True),
-                                    outputs=[input_desc]
+                                    lambda v: (not v, gr.update(visible=not v)),
+                                    inputs=[desc_visible],
+                                    outputs=[desc_visible, input_desc]
                                 )
-                                inputs.append(input_name)
-                                inputs.append(input_desc)
+                                inputs.extend([input_name, input_desc, desc_visible])
                     
                     with gr.Column():
                         for i, output_value in enumerate(output_values):
@@ -152,14 +153,16 @@ with gr.Blocks() as iface:
                                     show_label=False,
                                     label=f"Output {i+1} Description",
                                     info="Optionally provide a description for this output field.",
-                                    visible=False
+                                    visible=False,
+                                    scale=1
                                 )
+                                desc_visible = gr.State(False)
                                 expand_btn.click(
-                                    lambda: gr.update(visible=True),
-                                    outputs=[output_desc]
+                                    lambda v: (not v, gr.update(visible=not v)),
+                                    inputs=[desc_visible],
+                                    outputs=[desc_visible, output_desc]
                                 )
-                                outputs.append(output_name)
-                                outputs.append(output_desc)
+                                outputs.extend([output_name, output_desc, desc_visible])
 
                 gr.Markdown("### Settings")
                 with gr.Row():
@@ -313,12 +316,12 @@ with gr.Blocks() as iface:
                     output_fields = []
                     output_descs = []
                     
-                    for i in range(0, len(inputs), 2):
+                    for i in range(0, len(inputs), 3):
                         if data[inputs[i]].strip():
                             input_fields.append(data[inputs[i]])
                             input_descs.append(data[inputs[i+1]] if data[inputs[i+1]].strip() else None)
                     
-                    for i in range(0, len(outputs), 2):
+                    for i in range(0, len(outputs), 3):
                         if data[outputs[i]].strip():
                             output_fields.append(data[outputs[i]])
                             output_descs.append(data[outputs[i+1]] if data[outputs[i+1]].strip() else None)
