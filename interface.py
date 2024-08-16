@@ -49,7 +49,16 @@ def get_available_prompts():
 
 
 # Gradio interface
-with gr.Blocks() as iface:
+custom_css = """
+.expand-button {
+  min-width: 20px !important;
+  width: 20px !important;
+  padding: 0 !important;
+  font-size: 10px !important;
+}
+"""
+
+with gr.Blocks(css=custom_css) as iface:
     with gr.Tabs():
         with gr.TabItem("Compile Program"):
             gr.Markdown("# DSPyUI: a Gradio user interface for DSPy")
@@ -71,34 +80,22 @@ with gr.Blocks() as iface:
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Inputs")
-                    with gr.Row():
-                        add_input_btn = gr.Button("Add Input Field")
-                        del_input_btn = gr.Button("Delete Last Input")
-                    add_input_btn.click(
-                        lambda values: values + [f"Input{len(values)+1}"],
-                        inputs=input_values,
-                        outputs=input_values
-                    )
-                    del_input_btn.click(
-                        lambda values: values[:-1] if len(values) > 1 else values,
-                        inputs=input_values,
-                        outputs=input_values
-                    )
+                    add_input_btn = gr.Button("Add Input Field")
                 with gr.Column():
                     gr.Markdown("### Outputs")
-                    with gr.Row():
-                        add_output_btn = gr.Button("Add Output Field")
-                        del_output_btn = gr.Button("Delete Last Output")
-                    add_output_btn.click(
-                        lambda values: values + [f"Output{len(values)+1}"],
-                        inputs=output_values,
-                        outputs=output_values
-                    )
-                    del_output_btn.click(
-                        lambda values: values[:-1] if len(values) > 1 else values,
-                        inputs=output_values,
-                        outputs=output_values
-                    )
+                    add_output_btn = gr.Button("Add Output Field")
+
+            add_input_btn.click(
+                lambda values: values + [f"Input{len(values)+1}"],
+                inputs=input_values,
+                outputs=input_values
+            )
+
+            add_output_btn.click(
+                lambda values: values + [f"Output{len(values)+1}"],
+                inputs=output_values,
+                outputs=output_values
+            )
 
             @gr.render(inputs=[input_values, output_values])
             def render_variables(input_values, output_values):
@@ -115,9 +112,9 @@ with gr.Blocks() as iface:
                                         show_label=False,
                                         label=f"Input {i+1} Name",
                                         info="Specify the name of this input field.",
-                                        scale=10
+                                        scale=9
                                     )
-                                    expand_btn = gr.Button("▼", size="sm", scale=1)
+                                    expand_btn = gr.Button("▼", size="sm", scale=1, elem_classes="expand-button")
                                 input_desc = gr.Textbox(
                                     placeholder="Description (optional)",
                                     key=f"input-desc-{i}",
@@ -144,9 +141,9 @@ with gr.Blocks() as iface:
                                         show_label=False,
                                         label=f"Output {i+1} Name",
                                         info="Specify the name of this output field.",
-                                        scale=10
+                                        scale=9
                                     )
-                                    expand_btn = gr.Button("▼", size="sm", scale=1)
+                                    expand_btn = gr.Button("▼", size="sm", scale=1, elem_classes="expand-button")
                                 output_desc = gr.Textbox(
                                     placeholder="Description (optional)",
                                     key=f"output-desc-{i}",
@@ -154,7 +151,6 @@ with gr.Blocks() as iface:
                                     label=f"Output {i+1} Description",
                                     info="Optionally provide a description for this output field.",
                                     visible=False,
-                                    scale=1
                                 )
                                 desc_visible = gr.State(False)
                                 expand_btn.click(
