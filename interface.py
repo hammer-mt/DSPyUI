@@ -59,6 +59,16 @@ custom_css = """
 """
 
 with gr.Blocks(css=custom_css) as iface:
+    def create_prompt_element(prompt):
+        with gr.Column(scale=1):
+            with gr.Group():
+                gr.Markdown(f"**ID:** {prompt['ID']}")
+                gr.Markdown(f"**Signature:** {prompt['Signature']}")
+                gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
+                view_details_btn = gr.Button("View Details")
+                gr.Markdown("---")  # Add a horizontal line for separation
+        return gr.update(visible=True)
+
     with gr.Tabs():
         with gr.TabItem("Compile Program"):
             gr.Markdown("# DSPyUI: a Gradio user interface for DSPy")
@@ -415,13 +425,45 @@ with gr.Blocks(css=custom_css) as iface:
             gr.Markdown("# View Prompts")
             prompts = list_prompts()
             
+            # Extract unique signatures for the dropdown
+            unique_signatures = sorted(set(p["Signature"] for p in prompts))
+
+            # Add filter and sort functionality
+            filter_signature = gr.Dropdown(label="Filter by Signature", choices=unique_signatures, value=None)
+            sort_order = gr.Radio(["Ascending", "Descending"], label="Sort by Evaluation Score", value="Descending")
+
+            prompt_container = gr.Column()
             selected_prompt_details = gr.Markdown()  # Placeholder for selected prompt details
-            
+
+            def filter_and_sort_prompts(signature, order):
+                if signature:
+                    filtered_prompts = [p for p in prompts if signature in p["Signature"]]
+                else:
+                    filtered_prompts = prompts
+                sorted_prompts = sorted(filtered_prompts, key=lambda x: float(x["Eval Score"]), reverse=(order == "Descending"))
+                
+                prompt_elements = []
+                for prompt in sorted_prompts:
+                    prompt_elements.append(create_prompt_element(prompt))
+                return prompt_elements
+
+            filter_signature.change(
+                filter_and_sort_prompts,
+                inputs=[filter_signature, sort_order],
+                outputs=[prompt_container]
+            )
+
+            sort_order.change(
+                filter_and_sort_prompts,
+                inputs=[filter_signature, sort_order],
+                outputs=[prompt_container]
+            )
+
             def show_prompt_details(prompt):
                 details = json.loads(prompt["Details"])
                 formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
                 return gr.update(value=formatted_details)
-            
+
             # Create rows with 3 columns each
             num_columns = 3
             for i in range(0, len(prompts), num_columns):
