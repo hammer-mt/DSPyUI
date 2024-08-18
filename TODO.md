@@ -1,0 +1,4 @@
+- make the prompts interface look a lot nicer with clearer information
+- only show llm as a judge options that fit the same signature as the prompt
+- add the ability to run a generate of the compiled prompt
+- fix issue with MIPROv2: AssertionError: No LM is loaded.

@@ -283,6 +283,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
                 return 0.0  # Return a default score in case of error
     else:
         raise ValueError(f"Unknown metric type: {metric_type}")
+    
+    # Use a single thread for evaluation
+    kwargs = dict(num_threads=1, display_progress=True, display_table=1)
 
     # Set up the optimizer
     if optimizer == "None":
@@ -296,7 +299,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     elif optimizer == "COPRO":
         teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
-        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
+        compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
     elif optimizer == "MIPRO":
         teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
         num_trials = 10  # Adjust this value as needed
@@ -323,9 +326,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         )
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
-
-    # Use a single thread for evaluation
-    kwargs = dict(num_threads=1, display_progress=True, display_table=1)
 
     # Evaluate the compiled program
     evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
