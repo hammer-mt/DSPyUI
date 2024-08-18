@@ -80,10 +80,14 @@ with gr.Blocks(css=custom_css) as iface:
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Inputs")
-                    add_input_btn = gr.Button("Add Input Field")
+                    with gr.Row():
+                        add_input_btn = gr.Button("Add Input Field")
+                        remove_input_btn = gr.Button("Remove Last Input")
                 with gr.Column():
                     gr.Markdown("### Outputs")
-                    add_output_btn = gr.Button("Add Output Field")
+                    with gr.Row():  
+                        add_output_btn = gr.Button("Add Output Field")
+                        remove_output_btn = gr.Button("Remove Last Output")
 
             add_input_btn.click(
                 lambda values: values + [f"Input{len(values)+1}"],
@@ -91,8 +95,20 @@ with gr.Blocks(css=custom_css) as iface:
                 outputs=input_values
             )
 
+            remove_input_btn.click(
+                lambda values: values[:-1] if values else values,
+                inputs=input_values,
+                outputs=input_values
+            )
+
             add_output_btn.click(
                 lambda values: values + [f"Output{len(values)+1}"],
+                inputs=output_values,
+                outputs=output_values
+            )
+
+            remove_output_btn.click(
+                lambda values: values[:-1] if values else values,
                 inputs=output_values,
                 outputs=output_values
             )
@@ -315,12 +331,14 @@ with gr.Blocks(css=custom_css) as iface:
                     for i in range(0, len(inputs), 3):
                         if data[inputs[i]].strip():
                             input_fields.append(data[inputs[i]])
-                            input_descs.append(data[inputs[i+1]] if data[inputs[i+1]].strip() else None)
+                            if data[inputs[i+1]].strip():
+                                input_descs.append(data[inputs[i+1]])
                     
                     for i in range(0, len(outputs), 3):
                         if data[outputs[i]].strip():
                             output_fields.append(data[outputs[i]])
-                            output_descs.append(data[outputs[i+1]] if data[outputs[i+1]].strip() else None)
+                            if data[outputs[i+1]].strip():
+                                output_descs.append(data[outputs[i+1]])
 
                     # Get the judge prompt ID if LLM-as-a-Judge is selected
                     judge_prompt_id = None

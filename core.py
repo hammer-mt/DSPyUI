@@ -28,12 +28,16 @@ dspy.configure(lm=lm)
 def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str, input_descs: List[str], output_descs: List[str]):
     fields = {}
     for i, field in enumerate(input_fields):
-        desc = input_descs[i] if i < len(input_descs) and input_descs[i] else None
-        fields[field] = (str, dspy.InputField(default=..., desc=desc, json_schema_extra={"__dspy_field_type": "input"}))
+        if i < len(input_descs) and input_descs[i]:
+            fields[field] = (str, dspy.InputField(default=..., desc=input_descs[i], json_schema_extra={"__dspy_field_type": "input"}))
+        else:
+            fields[field] = (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"}))
     
     for i, field in enumerate(output_fields):
-        desc = output_descs[i] if i < len(output_descs) and output_descs[i] else None
-        fields[field] = (str, dspy.OutputField(default=..., desc=desc, json_schema_extra={"__dspy_field_type": "output"}))
+        if i < len(output_descs) and output_descs[i]:
+            fields[field] = (str, dspy.OutputField(default=..., desc=output_descs[i], json_schema_extra={"__dspy_field_type": "output"}))
+        else:
+            fields[field] = (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"}))
     
     CustomSignatureModel = create_model('CustomSignatureModel', **fields)
     
@@ -73,7 +77,7 @@ def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
             
             def forward(self, **kwargs):
                 result = self.predictor(**kwargs)
-                return dspy.Prediction(**{field: getattr(result, field) for field in CustomSignature.__annotations__ if field not in CustomSignature.__fields_set__})
+                return result  # Return the result directly
         
         return CustomPredictModule()
     elif dspy_module == "ChainOfThought":
@@ -141,7 +145,24 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Set up the evaluation metric
     if metric_type == "Exact Match":
         def metric(gold, pred, trace=None):
-            return int(all(gold[field] == pred[field] for field in output_fields))
+            print("Gold:", gold)
+            print("Pred:", pred)
+            print("Pred type:", type(pred))
+            print("Pred attributes:", dir(pred))
+            
+            if isinstance(pred, dspy.Prediction):
+                print("Prediction fields:", pred.__dict__)
+            
+            # Check if pred is empty or None
+            if not pred or (isinstance(pred, dspy.Prediction) and not pred.__dict__):
+                print("Warning: Prediction is empty or None")
+                return 0
+            
+            try:
+                return int(all(gold[field] == getattr(pred, field) for field in output_fields))
+            except AttributeError as e:
+                print(f"AttributeError: {e}")
+                return 0
     elif metric_type == "Cosine Similarity":
         # Initialize the OpenAI client
         client = OpenAI()
