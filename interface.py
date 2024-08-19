@@ -56,6 +56,22 @@ custom_css = """
   padding: 0 !important;
   font-size: 10px !important;
 }
+.prompt-card {
+  height: 150px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  padding: 10px !important;
+  position: relative !important;
+}
+.prompt-details {
+  flex-grow: 1 !important;
+}
+.view-details-btn {
+  position: absolute !important;
+  bottom: 10px !important;
+  right: 10px !important;
+}
 """
 
 with gr.Blocks(css=custom_css) as iface:
@@ -428,10 +444,11 @@ with gr.Blocks(css=custom_css) as iface:
             # Extract unique signatures for the dropdown
             unique_signatures = sorted(set(p["Signature"] for p in prompts))
 
-            # Add filter and sort functionality
-            filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All")
-            sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date")
-            sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending")
+            # Add filter and sort functionality in one line
+            with gr.Row():
+                filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
+                sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
+                sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
             
             selected_prompt_details = gr.Markdown()  # Placeholder for selected prompt details
 
@@ -452,21 +469,25 @@ with gr.Blocks(css=custom_css) as iface:
                 
                 sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(order == "Descending"))
                 
-                for prompt in sorted_prompts:
-                    with gr.Group():
-                        gr.Markdown(f"""
-                        **ID:** {prompt['ID']}
-                        **Signature:** {prompt['Signature']}
-                        **Eval Score:** {prompt['Eval Score']}
-                        """)
-                        view_details_btn = gr.Button("View Details")
-                        
-                        def show_details(prompt=prompt):
-                            details = json.loads(prompt["Details"])
-                            formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
-                            return gr.update(value=formatted_details)
-                        
-                        view_details_btn.click(show_details, outputs=[selected_prompt_details])
+                for i in range(0, len(sorted_prompts), 3):
+                    with gr.Row():
+                        for j in range(3):
+                            if i + j < len(sorted_prompts):
+                                prompt = sorted_prompts[i + j]
+                                with gr.Column():
+                                    with gr.Group(elem_classes="prompt-card"):
+                                        with gr.Column(elem_classes="prompt-details"):
+                                            gr.Markdown(f"**ID:** {prompt['ID']}")
+                                            gr.Markdown(f"**Signature:** {prompt['Signature']}")
+                                            gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
+                                        view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
+                                    
+                                    def show_details(prompt=prompt):
+                                        details = json.loads(prompt["Details"])
+                                        formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
+                                        return gr.update(value=formatted_details)
+                                    
+                                    view_details_btn.click(show_details, outputs=[selected_prompt_details])
 
                 gr.Markdown("## Prompt Details")
                 selected_prompt_details
