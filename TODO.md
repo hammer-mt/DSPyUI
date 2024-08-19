@@ -1,4 +1,3 @@
 - only show llm as a judge options that fit the same signature as the prompt
 - add the ability to run a generate of the compiled prompt
 - fix issue with MIPROv2: AssertionError: No LM is loaded.
-- gradio.exceptions.InvalidComponentError: <class 'gradio.layouts.column.Column'> Component not a valid output component.

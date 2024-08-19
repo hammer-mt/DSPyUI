@@ -430,12 +430,13 @@ with gr.Blocks(css=custom_css) as iface:
 
             # Add filter and sort functionality
             filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All")
-            sort_order = gr.Radio(["Ascending", "Descending"], label="Sort by Evaluation Score", value="Descending")
+            sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date")
+            sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending")
             
             selected_prompt_details = gr.Markdown()  # Placeholder for selected prompt details
 
-            @gr.render(inputs=[filter_signature, sort_order])
-            def render_prompts(filter_signature, sort_order):
+            @gr.render(inputs=[filter_signature, sort_by, sort_order])
+            def render_prompts(filter_signature, sort_by, sort_order):
                 signature = filter_signature
                 order = sort_order
 
@@ -444,7 +445,12 @@ with gr.Blocks(css=custom_css) as iface:
                 else:
                     filtered_prompts = prompts
                 
-                sorted_prompts = sorted(filtered_prompts, key=lambda x: float(x["Eval Score"]), reverse=(order == "Descending"))
+                if sort_by == "Evaluation Score":
+                    key_func = lambda x: float(x["Eval Score"])
+                else:  # Run Date
+                    key_func = lambda x: x["ID"]  # Use the entire ID for sorting
+                
+                sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(order == "Descending"))
                 
                 for prompt in sorted_prompts:
                     with gr.Group():
