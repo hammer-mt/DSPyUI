@@ -450,8 +450,6 @@ with gr.Blocks(css=custom_css) as iface:
                 sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
                 sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
             
-            selected_prompt_details = gr.Markdown()  # Placeholder for selected prompt details
-
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
             def render_prompts(filter_signature, sort_by, sort_order):
                 signature = filter_signature
@@ -468,6 +466,12 @@ with gr.Blocks(css=custom_css) as iface:
                     key_func = lambda x: x["ID"]  # Use the entire ID for sorting
                 
                 sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(order == "Descending"))
+
+                with gr.Row():
+                    with gr.Column():
+                        gr.Markdown("## Prompt Details")
+                        with gr.Group():
+                            selected_prompt_details = gr.Markdown()
                 
                 for i in range(0, len(sorted_prompts), 3):
                     with gr.Row():
@@ -489,8 +493,7 @@ with gr.Blocks(css=custom_css) as iface:
                                     
                                     view_details_btn.click(show_details, outputs=[selected_prompt_details])
 
-                gr.Markdown("## Prompt Details")
-                selected_prompt_details
+                
 
 # Launch the interface
 iface.launch()
