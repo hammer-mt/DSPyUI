@@ -466,10 +466,9 @@ with gr.Blocks(css=custom_css) as iface:
                                     details = json.loads(selected_prompt["Details"])
                                     formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
                                     gr.Markdown(formatted_details)
-                                # close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm")
-                                # close_details_btn.click(lambda: gr.update(value=None), outputs=[selected_prompt])
-                            
-
+            
+            close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm", visible=False)
+            close_details_btn.click(lambda: (None, gr.update(visible=False)), outputs=[selected_prompt, close_details_btn])
             
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
             def render_prompts(filter_signature, sort_by, sort_order):
@@ -501,7 +500,7 @@ with gr.Blocks(css=custom_css) as iface:
                                             gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
                                         view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
                                     
-                                    view_details_btn.click(lambda: prompt, outputs=[selected_prompt])
+                                    view_details_btn.click(lambda: (prompt, gr.update(visible=True)), outputs=[selected_prompt, close_details_btn])
 
                 
 
