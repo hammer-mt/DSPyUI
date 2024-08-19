@@ -440,6 +440,8 @@ with gr.Blocks(css=custom_css) as iface:
         with gr.TabItem("View Prompts"):
             gr.Markdown("# View Prompts")
             prompts = list_prompts()
+
+            selected_prompt = gr.State(None)
             
             # Extract unique signatures for the dropdown
             unique_signatures = sorted(set(p["Signature"] for p in prompts))
@@ -449,6 +451,25 @@ with gr.Blocks(css=custom_css) as iface:
                 filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
                 sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
                 sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
+
+            @gr.render(inputs=[selected_prompt])
+            def render_prompt_details(selected_prompt):
+                if selected_prompt is not None:
+                    with gr.Row():
+                        with gr.Column():
+                            gr.Markdown("## Prompt Details")
+                            with gr.Group():
+                                with gr.Column(elem_classes="prompt-details-full"):
+                                    gr.Markdown(f"**ID:** {selected_prompt['ID']}")
+                                    gr.Markdown(f"**Signature:** {selected_prompt['Signature']}")
+                                    gr.Markdown(f"**Eval Score:** {selected_prompt['Eval Score']}")
+                                    details = json.loads(selected_prompt["Details"])
+                                    formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
+                                    gr.Markdown(formatted_details)
+                                # close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm")
+                                # close_details_btn.click(lambda: gr.update(value=None), outputs=[selected_prompt])
+                            
+
             
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
             def render_prompts(filter_signature, sort_by, sort_order):
@@ -466,12 +487,6 @@ with gr.Blocks(css=custom_css) as iface:
                     key_func = lambda x: x["ID"]  # Use the entire ID for sorting
                 
                 sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(order == "Descending"))
-
-                with gr.Row():
-                    with gr.Column():
-                        gr.Markdown("## Prompt Details")
-                        with gr.Group():
-                            selected_prompt_details = gr.Markdown()
                 
                 for i in range(0, len(sorted_prompts), 3):
                     with gr.Row():
@@ -486,12 +501,7 @@ with gr.Blocks(css=custom_css) as iface:
                                             gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
                                         view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
                                     
-                                    def show_details(prompt=prompt):
-                                        details = json.loads(prompt["Details"])
-                                        formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
-                                        return gr.update(value=formatted_details)
-                                    
-                                    view_details_btn.click(show_details, outputs=[selected_prompt_details])
+                                    view_details_btn.click(lambda: prompt, outputs=[selected_prompt])
 
                 
 
