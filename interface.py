@@ -438,7 +438,7 @@ with gr.Blocks(css=custom_css) as iface:
                 )
 
         with gr.TabItem("View Prompts"):
-            gr.Markdown("# View Prompts")
+            
             prompts = list_prompts()
 
             selected_prompt = gr.State(None)
@@ -446,30 +446,55 @@ with gr.Blocks(css=custom_css) as iface:
             # Extract unique signatures for the dropdown
             unique_signatures = sorted(set(p["Signature"] for p in prompts))
 
-            # Add filter and sort functionality in one line
-            with gr.Row():
-                filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
-                sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
-                sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
+            close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm", visible=False)
+            close_details_btn.click(lambda: (None, gr.update(visible=False)), outputs=[selected_prompt, close_details_btn])
+            
 
             @gr.render(inputs=[selected_prompt])
             def render_prompt_details(selected_prompt):
                 if selected_prompt is not None:
                     with gr.Row():
                         with gr.Column():
-                            gr.Markdown("## Prompt Details")
+                            details = json.loads(selected_prompt["Details"])
+                            gr.Markdown(f"## {details['human_readable_id']}")
                             with gr.Group():
                                 with gr.Column(elem_classes="prompt-details-full"):
-                                    gr.Markdown(f"**ID:** {selected_prompt['ID']}")
-                                    gr.Markdown(f"**Signature:** {selected_prompt['Signature']}")
-                                    gr.Markdown(f"**Eval Score:** {selected_prompt['Eval Score']}")
-                                    details = json.loads(selected_prompt["Details"])
-                                    formatted_details = "\n".join([f"**{key}:** {value}" for key, value in details.items()])
-                                    gr.Markdown(formatted_details)
+                                    gr.Number(value=float(selected_prompt['Eval Score']), label="Evaluation Score", interactive=False)
+                                    
+                                    with gr.Row():
+                                        gr.Dropdown(choices=details['input_fields'], value=details['input_fields'], label="Input Fields", interactive=False, multiselect=True)
+                                        gr.Dropdown(choices=details['output_fields'], value=details['output_fields'], label="Output Fields", interactive=False, multiselect=True)
+                                    
+                                    with gr.Row():
+                                        gr.Dropdown(choices=[details['dspy_module']], value=details['dspy_module'], label="Module", interactive=False)
+                                        gr.Dropdown(choices=[details['llm_model']], value=details['llm_model'], label="Model", interactive=False)
+                                        gr.Dropdown(choices=[details['teacher_model']], value=details['teacher_model'], label="Teacher Model", interactive=False)
+                                        gr.Dropdown(choices=[details['optimizer']], value=details['optimizer'], label="Optimizer", interactive=False)
+                                    
+                                    gr.Textbox(value=details['instructions'], label="Instructions", interactive=False)
+                                    
+                                    gr.Textbox(value=details['optimized_prompt'], label="Optimized Prompt", interactive=False)
+                                    
+                                    for key, value in details.items():
+                                        if key not in ['signature', 'evaluation_score', 'usage_instructions', 'input_fields', 'output_fields', 'dspy_module', 'llm_model', 'teacher_model', 'optimizer', 'instructions', 'optimized_prompt', 'human_readable_id']:
+                                            if isinstance(value, list):
+                                                gr.Dropdown(choices=value, value=value, label=key.replace('_', ' ').title(), interactive=False, multiselect=True)
+                                            elif isinstance(value, bool):
+                                                gr.Checkbox(value=value, label=key.replace('_', ' ').title(), interactive=False)
+                                            elif isinstance(value, (int, float)):
+                                                gr.Number(value=value, label=key.replace('_', ' ').title(), interactive=False)
+                                            else:
+                                                gr.Textbox(value=str(value), label=key.replace('_', ' ').title(), interactive=False)
+                        
+
+            gr.Markdown("# View Prompts")
             
-            close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm", visible=False)
-            close_details_btn.click(lambda: (None, gr.update(visible=False)), outputs=[selected_prompt, close_details_btn])
-            
+            # Add filter and sort functionality in one line
+            with gr.Row():
+                filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
+                sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
+                sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
+
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
             def render_prompts(filter_signature, sort_by, sort_order):
                 signature = filter_signature

@@ -2,4 +2,4 @@
 
 a Gradio user interface for DSPy.
 
-`bash dspy.sh`
+`bash webui.sh`
