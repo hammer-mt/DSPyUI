@@ -166,3 +166,5 @@ exported_data.csv
 testing.ipynb
 *.json
 .DS_Store
+.cursorrules
+notes/
