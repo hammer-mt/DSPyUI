@@ -266,11 +266,12 @@ with gr.Blocks(css=custom_css) as iface:
                     # Correctly assign input and output fields based on the actual arguments
                     input_fields = []
                     output_fields = []
-                    for arg in args:
+                    filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                    for arg in filtered_args:
                         if arg and isinstance(arg, str) and arg.strip():
                             if len(input_fields) < len(input_values):
                                 input_fields.append(arg)
-                            else:
+                            elif len(output_fields) < len(output_values):
                                 output_fields.append(arg)
 
                     if metric == "LLM-as-a-Judge":
@@ -320,11 +321,12 @@ with gr.Blocks(css=custom_css) as iface:
                     # Correctly assign input and output fields based on the actual arguments
                     input_fields = []
                     output_fields = []
-                    for arg in args:
+                    filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                    for arg in filtered_args:
                         if arg and isinstance(arg, str) and arg.strip():
                             if len(input_fields) < len(input_values):
                                 input_fields.append(arg)
-                            else:
+                            elif len(output_fields) < len(output_values):
                                 output_fields.append(arg)
 
                     headers = input_fields + output_fields
@@ -348,11 +350,12 @@ with gr.Blocks(css=custom_css) as iface:
                             # Correctly assign input and output fields based on the actual arguments
                             input_fields = []
                             output_fields = []
-                            for arg in args:
+                            filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                            for arg in filtered_args:
                                 if arg and isinstance(arg, str) and arg.strip():
                                     if len(input_fields) < len(input_values):
                                         input_fields.append(arg)
-                                    else:
+                                    elif len(output_fields) < len(output_values):
                                         output_fields.append(arg)
                             expected_headers = input_fields + output_fields
                             
