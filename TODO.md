@@ -1,3 +1,6 @@
 - only show llm as a judge options that fit the same signature as the prompt
 - add the ability to run a generate of the compiled prompt
+- ability to load an existing prompt back into the interface
+- add description of each field in the prompt details section
 - fix issue with MIPROv2: AssertionError: No LM is loaded
+- support all the various optimizers and modules in the interface
