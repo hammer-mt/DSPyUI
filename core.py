@@ -68,7 +68,7 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
-def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
+def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None) -> dspy.Module:
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
             def __init__(self):
@@ -77,7 +77,7 @@ def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
             
             def forward(self, **kwargs):
                 result = self.predictor(**kwargs)
-                return result  # Return the result directly
+                return result
         
         return CustomPredictModule()
     elif dspy_module == "ChainOfThought":
@@ -90,10 +90,23 @@ def create_dspy_module(dspy_module: str, CustomSignature: type) -> dspy.Module:
                 return self.cot(**kwargs)
         
         return CustomChainOfThoughtModule()
+    elif dspy_module == "ChainOfThoughtWithHint":
+        class CustomChainOfThoughtWithHintModule(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.cot_with_hint = dspy.ChainOfThought(CustomSignature)
+                self.hint = hint
+            
+            def forward(self, **kwargs):
+                # Inject the hint into the kwargs
+                kwargs['hint'] = self.hint
+                return self.cot_with_hint(**kwargs)
+        
+        return CustomChainOfThoughtWithHintModule()
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
         lm = dspy.OpenAI(model=llm_model)
@@ -124,7 +137,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs or [], output_descs or [])
 
     # Create the DSPy module using the new function
-    module = create_dspy_module(dspy_module, CustomSignature)
+    module = create_dspy_module(dspy_module, CustomSignature, hint)
 
     # Convert DataFrame to list of dictionaries
     example_data_list = example_data.to_dict('records')
@@ -310,10 +323,11 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
             max_labeled_demos=max_labeled_demos,
             eval_kwargs=kwargs, requires_permission_to_run=False)
     elif optimizer == "MIPROv2":
-        teleprompter = MIPROv2(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        teleprompter = MIPROv2(metric=metric, prompt_model=lm, task_model=teacher_lm, num_candidates=10, init_temperature=1.0)
+
         num_batches = 30
-        max_bootstrapped_demos = 5
-        max_labeled_demos = 2
+        max_bootstrapped_demos = 8
+        max_labeled_demos = 16
         compiled_program = teleprompter.compile(
             module,
             trainset=trainset,
@@ -353,6 +367,10 @@ compiled_program.load('programs/{human_readable_id}.json')
 result = compiled_program({', '.join(f'{field}=value' for field in input_fields)})
 print({', '.join(f'result.{field}' for field in output_fields)})
 """
+
+    # Update the usage instructions to include the hint if applicable
+    if dspy_module == "ChainOfThoughtWithHint":
+        usage_instructions += f"\nHint: {hint}\n"
 
     # Use the compiled program with the first row of example data
     if len(example_data) > 0:

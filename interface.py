@@ -234,12 +234,20 @@ with gr.Blocks(css=custom_css) as iface:
                         value="gpt-4o",
                         info="Select a more capable (but slower and more expensive) model to act as a teacher during the compilation process. This model helps generate high-quality examples and refine prompts."
                     )
-                    dspy_module = gr.Dropdown(
-                        ["Predict", "ChainOfThought"],
-                        label="Module",
-                        value="Predict",
-                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning."
-                    )
+                    with gr.Column():
+                        dspy_module = gr.Dropdown(
+                            ["Predict", "ChainOfThought", "ChainOfThoughtWithHint"],
+                            label="Module",
+                            value="Predict",
+                            info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, and ChainOfThoughtWithHint for guided reasoning."
+                        )
+                        hint_textbox = gr.Textbox(
+                            label="Hint",
+                            lines=2,
+                            placeholder="Enter a hint for the Chain of Thought with Hint module.",
+                            visible=False
+                        )
+
                 with gr.Row():
                     optimizer = gr.Dropdown(
                         ["None", "BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
@@ -387,6 +395,13 @@ with gr.Blocks(css=custom_css) as iface:
                     outputs=[csv_download]
                 )
 
+                # Function to show/hide the hint textbox based on the selected module
+                def update_hint_visibility(module):
+                    return gr.update(visible=module == "ChainOfThoughtWithHint")
+
+                # Connect the visibility update function to the module dropdown
+                dspy_module.change(update_hint_visibility, inputs=[dspy_module], outputs=[hint_textbox])
+
                 def compile(data):
                     input_fields = []
                     input_descs = []
@@ -410,6 +425,8 @@ with gr.Blocks(css=custom_css) as iface:
                     if data[metric_type] == "LLM-as-a-Judge":
                         judge_prompt_id = data[judge_prompt].split(' - ')[0]
 
+                    hint = data[hint_textbox] if data[dspy_module] == "ChainOfThoughtWithHint" else None
+                    
                     usage_instructions, optimized_prompt = compile_program(
                         input_fields,
                         output_fields,
@@ -422,7 +439,8 @@ with gr.Blocks(css=custom_css) as iface:
                         data[metric_type],
                         judge_prompt_id,
                         input_descs,
-                        output_descs
+                        output_descs,
+                        hint  # Add the hint parameter
                     )
                     
                     signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
@@ -474,7 +492,7 @@ with gr.Blocks(css=custom_css) as iface:
 
                 compile_button.click(
                     compile,
-                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt]),
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox]),
                     outputs=[signature, evaluation_score, optimized_prompt, usage_instructions]
                 )
 

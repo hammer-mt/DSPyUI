@@ -1,6 +1,5 @@
+- fix bug with view prompt details showing wrong prompt
+- support all the various optimizers and modules in the interface
 - add the ability to run a generate of the compiled prompt
 - ability to load an existing prompt back into the interface
-- fix issue with MIPROv2: AssertionError: No LM is loaded
-- support all the various optimizers and modules in the interface
 - add three examples, one for each Metric option
-- fix bug with view prompt details showing wrong prompt
