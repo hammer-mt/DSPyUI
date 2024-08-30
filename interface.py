@@ -447,7 +447,9 @@ with gr.Blocks(css=custom_css) as iface:
                     # Save details to JSON
                     details = {
                         "input_fields": input_fields,
+                        "input_descriptions": input_descs,
                         "output_fields": output_fields,
+                        "output_descriptions": output_descs,
                         "dspy_module": data[dspy_module],
                         "llm_model": data[llm_model],
                         "teacher_model": data[teacher_model],
@@ -501,8 +503,8 @@ with gr.Blocks(css=custom_css) as iface:
                                     gr.Number(value=float(selected_prompt['Eval Score']), label="Evaluation Score", interactive=False)
                                     
                                     with gr.Row():
-                                        gr.Dropdown(choices=details['input_fields'], value=details['input_fields'], label="Input Fields", interactive=False, multiselect=True)
-                                        gr.Dropdown(choices=details['output_fields'], value=details['output_fields'], label="Output Fields", interactive=False, multiselect=True)
+                                        gr.Dropdown(choices=details['input_fields'], value=details['input_fields'], label="Input Fields", interactive=False, multiselect=True, info=", ".join(details.get('input_descs', [])))
+                                        gr.Dropdown(choices=details['output_fields'], value=details['output_fields'], label="Output Fields", interactive=False, multiselect=True, info=", ".join(details.get('output_descs', [])))
                                     
                                     with gr.Row():
                                         gr.Dropdown(choices=[details['dspy_module']], value=details['dspy_module'], label="Module", interactive=False)
