@@ -7,45 +7,46 @@ import glob
 from core import compile_program
 
 # Function to list prompts
-def list_prompts():
+
+def list_prompts(signature_filter=None):
+    print(f"Listing prompts with signature filter: {signature_filter}")
+    
     if not os.path.exists('prompts'):
+        print("Prompts directory does not exist")
         return []
+    
     files = os.listdir('prompts')
     if not files:
+        print("No prompt files found in the prompts directory")
         return []
     
     prompt_details = []
     for file in files:
         if file.endswith('.json'):
+            print(f"Processing file: {file}")
             with open(os.path.join('prompts', file), 'r') as f:
                 data = json.load(f)
                 prompt_id = file
-                signature = data.get('signature', 'N/A')
+                signature = f"{', '.join(data['input_fields'])} -> {', '.join(data['output_fields'])}"
                 eval_score = data.get('evaluation_score', 'N/A')
                 # Exclude example data
                 details = {k: v for k, v in data.items() if k != 'example_data'}
+                
+                # Check if signature_filter is provided and matches
+                if signature_filter and signature_filter.lower() not in signature.lower():
+                    print(f"Skipping file {file} due to signature mismatch")
+                    continue
+                
                 prompt_details.append({
                     "ID": prompt_id,
                     "Signature": signature,
                     "Eval Score": eval_score,
                     "Details": json.dumps(details, indent=4)  # Add full details as a JSON string
                 })
+                print(f"Added prompt details for file: {file}")
     
+    print(f"Found {len(prompt_details)} matching prompts")
     return prompt_details  # Return the list of prompts as dictionaries
-
-# Function to get available prompts for LLM-as-a-Judge
-def get_available_prompts():
-    prompt_files = glob.glob('prompts/*.json')
-    prompts = []
-    for file in prompt_files:
-        with open(file, 'r') as f:
-            data = json.load(f)
-            prompts.append({
-                "id": os.path.basename(file).split('.')[0],
-                "signature": data.get('signature', 'N/A'),
-                "eval_score": data.get('evaluation_score', 'N/A')
-            })
-    return prompts
 
 
 # Gradio interface
@@ -251,8 +252,10 @@ with gr.Blocks(css=custom_css) as iface:
                         )
 
                 def update_judge_prompt_visibility(metric):
+                    
                     if metric == "LLM-as-a-Judge":
-                        prompts = get_available_prompts()
+                        signature = f"{', '.join(input_values)} -> {', '.join(output_values)}"
+                        prompts = list_prompts(signature_filter=signature)
                         return gr.update(visible=True, choices=[f"{p['id']} - {p['signature']} (Score: {p['eval_score']})" for p in prompts])
                     else:
                         return gr.update(visible=False, choices=[])
@@ -497,20 +500,18 @@ with gr.Blocks(css=custom_css) as iface:
 
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
             def render_prompts(filter_signature, sort_by, sort_order):
-                signature = filter_signature
-                order = sort_order
-
-                if signature and signature != "All":
-                    filtered_prompts = [p for p in prompts if p["Signature"] == signature]
+                if filter_signature and filter_signature != "All":
+                    filtered_prompts = list_prompts(signature_filter=filter_signature)
                 else:
                     filtered_prompts = prompts
+                
                 
                 if sort_by == "Evaluation Score":
                     key_func = lambda x: float(x["Eval Score"])
                 else:  # Run Date
                     key_func = lambda x: x["ID"]  # Use the entire ID for sorting
                 
-                sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(order == "Descending"))
+                sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(sort_order == "Descending"))
                 
                 for i in range(0, len(sorted_prompts), 3):
                     with gr.Row():
