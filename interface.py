@@ -8,8 +8,9 @@ from core import compile_program
 
 # Function to list prompts
 
-def list_prompts(signature_filter=None):
+def list_prompts(signature_filter=None, output_filter=None):
     print(f"Listing prompts with signature filter: {signature_filter}")
+    print(f"Listing prompts with output filter: {output_filter}")
     
     if not os.path.exists('prompts'):
         print("Prompts directory does not exist")
@@ -28,6 +29,9 @@ def list_prompts(signature_filter=None):
                 data = json.load(f)
                 prompt_id = file
                 signature = f"{', '.join(data['input_fields'])} -> {', '.join(data['output_fields'])}"
+                
+                input_signature = f"{', '.join(data['input_fields'])}"
+                
                 eval_score = data.get('evaluation_score', 'N/A')
                 # Exclude example data
                 details = {k: v for k, v in data.items() if k != 'example_data'}
@@ -36,6 +40,12 @@ def list_prompts(signature_filter=None):
                 if signature_filter and signature_filter.lower() not in signature.lower():
                     print(f"Skipping file {file} due to signature mismatch")
                     continue
+
+                # Check if output_filter is provided and matches
+                if output_filter:
+                    if not all(filter_item.lower() in input_signature.lower() for filter_item in output_filter):
+                        print(f"Skipping file {file} due to output to input mismatch")
+                        continue
                 
                 prompt_details.append({
                     "ID": prompt_id,
@@ -264,8 +274,8 @@ with gr.Blocks(css=custom_css) as iface:
                                 output_fields.append(arg)
 
                     if metric == "LLM-as-a-Judge":
-                        signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
-                        prompts = list_prompts(signature_filter=signature)
+                        
+                        prompts = list_prompts(output_filter=input_fields + output_fields)
 
                         return gr.update(visible=True, choices=[f"{p['ID']} - {p['Signature']} (Score: {p['Eval Score']})" for p in prompts])
                     else:
