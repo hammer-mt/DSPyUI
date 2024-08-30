@@ -4,4 +4,3 @@
 - fix issue with MIPROv2: AssertionError: No LM is loaded
 - support all the various optimizers and modules in the interface
 - add three examples, one for each Metric option
-- fix the issue of saving signatures in the prompt details

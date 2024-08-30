@@ -251,18 +251,29 @@ with gr.Blocks(css=custom_css) as iface:
                             info="Select the prompt to use as the judge for evaluation."
                         )
 
-                def update_judge_prompt_visibility(metric):
-                    
+                def update_judge_prompt_visibility(metric, *args):
+
+                    # Correctly assign input and output fields based on the actual arguments
+                    input_fields = []
+                    output_fields = []
+                    for arg in args:
+                        if arg and isinstance(arg, str) and arg.strip():
+                            if len(input_fields) < len(input_values):
+                                input_fields.append(arg)
+                            else:
+                                output_fields.append(arg)
+
                     if metric == "LLM-as-a-Judge":
-                        signature = f"{', '.join(input_values)} -> {', '.join(output_values)}"
+                        signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
                         prompts = list_prompts(signature_filter=signature)
-                        return gr.update(visible=True, choices=[f"{p['id']} - {p['signature']} (Score: {p['eval_score']})" for p in prompts])
+
+                        return gr.update(visible=True, choices=[f"{p['ID']} - {p['Signature']} (Score: {p['Eval Score']})" for p in prompts])
                     else:
                         return gr.update(visible=False, choices=[])
 
                 metric_type.change(
                     update_judge_prompt_visibility,
-                    inputs=[metric_type],
+                    inputs=[metric_type] + inputs + outputs,
                     outputs=[judge_prompt]
                 )
 
@@ -295,11 +306,16 @@ with gr.Blocks(css=custom_css) as iface:
                     usage_instructions = gr.Textbox(label="Usage Instructions", info="Instructions on how to use your compiled DSPy program.")
 
                 def show_dataframe(*args):
-                    data = {f"input-{i}": value for i, value in enumerate(args[:len(input_values)])}
-                    data.update({f"output-{i}": value for i, value in enumerate(args[len(input_values):])})
-                    
-                    input_fields = [value for key, value in data.items() if key.startswith("input-") and value and value.strip()]
-                    output_fields = [value for key, value in data.items() if key.startswith("output-") and value and value.strip()]
+ 
+                    # Correctly assign input and output fields based on the actual arguments
+                    input_fields = []
+                    output_fields = []
+                    for arg in args:
+                        if arg and isinstance(arg, str) and arg.strip():
+                            if len(input_fields) < len(input_values):
+                                input_fields.append(arg)
+                            else:
+                                output_fields.append(arg)
 
                     headers = input_fields + output_fields
                     
@@ -315,12 +331,19 @@ with gr.Blocks(css=custom_css) as iface:
                 )
 
                 def process_csv(file, *args):
+  
                     if file is not None:
                         try:
                             df = pd.read_csv(file.name)
-                            # Use the actual input and output names entered by the user
-                            input_fields = [arg for arg in args[:len(input_values)] if arg and arg.strip()]
-                            output_fields = [arg for arg in args[len(input_values):] if arg and arg.strip()]
+                            # Correctly assign input and output fields based on the actual arguments
+                            input_fields = []
+                            output_fields = []
+                            for arg in args:
+                                if arg and isinstance(arg, str) and arg.strip():
+                                    if len(input_fields) < len(input_values):
+                                        input_fields.append(arg)
+                                    else:
+                                        output_fields.append(arg)
                             expected_headers = input_fields + output_fields
                             
                             if list(df.columns) != expected_headers:
