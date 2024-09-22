@@ -168,3 +168,4 @@ testing.ipynb
 .DS_Store
 .cursorrules
 notes/
+*.ipynb

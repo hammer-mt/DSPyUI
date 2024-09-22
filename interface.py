@@ -561,13 +561,14 @@ with gr.Blocks(css=custom_css) as iface:
                 else:
                     filtered_prompts = prompts
                 
-                
                 if sort_by == "Evaluation Score":
                     key_func = lambda x: float(x["Eval Score"])
                 else:  # Run Date
                     key_func = lambda x: x["ID"]  # Use the entire ID for sorting
                 
                 sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(sort_order == "Descending"))
+                
+                prompt_components = []
                 
                 for i in range(0, len(sorted_prompts), 3):
                     with gr.Row():
@@ -582,9 +583,13 @@ with gr.Blocks(css=custom_css) as iface:
                                             gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
                                         view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
                                     
-                                    view_details_btn.click(lambda: (prompt, gr.update(visible=True)), outputs=[selected_prompt, close_details_btn])
-
+                                    prompt_components.append((prompt, view_details_btn))
                 
+                for prompt, btn in prompt_components:
+                    btn.click(
+                        lambda p=prompt: (p, gr.update(visible=True)),
+                        outputs=[selected_prompt, close_details_btn]
+                    )
 
 # Launch the interface
 iface.launch()
