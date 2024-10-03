@@ -24,7 +24,6 @@ def list_prompts(signature_filter=None, output_filter=None):
     prompt_details = []
     for file in files:
         if file.endswith('.json'):
-            print(f"Processing file: {file}")
             with open(os.path.join('prompts', file), 'r') as f:
                 data = json.load(f)
                 prompt_id = file
@@ -53,9 +52,8 @@ def list_prompts(signature_filter=None, output_filter=None):
                     "Eval Score": eval_score,
                     "Details": json.dumps(details, indent=4)  # Add full details as a JSON string
                 })
-                print(f"Added prompt details for file: {file}")
     
-    print(f"Found {len(prompt_details)} matching prompts")
+    print(f"Found {len(prompt_details)} saved prompts")
     return prompt_details  # Return the list of prompts as dictionaries
 
 
@@ -98,8 +96,18 @@ with gr.Blocks(css=custom_css) as iface:
 
     with gr.Tabs():
         with gr.TabItem("Compile Program"):
-            gr.Markdown("# DSPyUI: a Gradio user interface for DSPy")
-            gr.Markdown("Compile a DSPy program by specifying your settings and providing example data.")
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("# DSPyUI: a Gradio user interface for DSPy")
+                    gr.Markdown("Compile a DSPy program by specifying your settings and providing example data.")
+
+                with gr.Column():
+                    gr.Markdown("### Demo Examples:")
+                    with gr.Row():  
+                        example1 = gr.Button("Train an LLM Judge")
+                        example2 = gr.Button("Optimize with a Judge")
+                        example3 = gr.Button("Fuzzy match evals")
             
             # Task Instructions
             with gr.Row():
@@ -108,8 +116,15 @@ with gr.Blocks(css=custom_css) as iface:
                         label="Task Instructions",
                         lines=3,
                         placeholder="Enter detailed task instructions here.",
-                        info="Provide clear and comprehensive instructions for the task. This will guide the DSPy program in understanding the specific requirements and expected outcomes."
+                        info="Provide clear and comprehensive instructions for the task. This will guide the DSPy program in understanding the specific requirements and expected outcomes.",
+                        interactive=True  # Add this line to ensure the textbox is editable
                     )
+            
+                    
+
+            example1.click(lambda: gr.update(value="Rate whether a joke is funny"), outputs=instructions)
+            example2.click(lambda: gr.update(value="Tell me a funny joke"), outputs=instructions)
+            example3.click(lambda: gr.update(value="Rewrite in a comedian's style"), outputs=instructions)
 
             input_values = gr.State(["Input1"])
             output_values = gr.State(["Output1"])
