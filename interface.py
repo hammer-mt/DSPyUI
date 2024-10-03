@@ -4,7 +4,7 @@ import json
 import os
 import glob
 
-from core import compile_program, list_prompts
+from core import compile_program, list_prompts, export_to_csv
 
 
 # Gradio interface
@@ -47,9 +47,9 @@ with gr.Blocks(css=custom_css) as iface:
                 with gr.Column():
                     gr.Markdown("### Demo Examples:")
                     with gr.Row():  
-                        example1 = gr.Button("Train an LLM Judge")
-                        example2 = gr.Button("Optimize with Judge")
-                        example3 = gr.Button("Fuzzy match evals")
+                        example1 = gr.Button("Judging Jokes")
+                        example2 = gr.Button("Telling Jokes")
+                        example3 = gr.Button("Rewriting Jokes")
             
             # Task Instructions
             with gr.Row():
@@ -64,7 +64,7 @@ with gr.Blocks(css=custom_css) as iface:
 
             input_values = gr.State([])
             output_values = gr.State([])
-
+            file_data = gr.State(None)
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Inputs")
@@ -109,8 +109,16 @@ with gr.Blocks(css=custom_css) as iface:
                 outputs=[output_values, remove_output_btn]
             )
 
-            @gr.render(inputs=[input_values, output_values])
-            def render_variables(input_values, output_values):
+            def load_csv(filename):
+                try:
+                    df = pd.read_csv(f"example_data/{filename}")
+                    return df
+                except Exception as e:
+                    print(f"Error loading CSV: {e}")
+                    return None
+
+            @gr.render(inputs=[input_values, output_values, file_data])
+            def render_variables(input_values, output_values, file_data):
                 inputs = []
                 outputs = []
                 with gr.Row():
@@ -299,9 +307,9 @@ with gr.Blocks(css=custom_css) as iface:
                 gr.Markdown("### Data")
                 with gr.Column():
                     with gr.Row():
-                        enter_manually_btn = gr.Button("Enter manually")
+                        enter_manually_btn = gr.Button("Enter manually", interactive=len(input_values) > 0 and len(output_values) > 0)
                         
-                        upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"])
+                        upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"], interactive=len(input_values) > 0 and len(output_values) > 0)
 
                     headers = [input_value[0] for input_value in input_values] + [output_value[0] for output_value in output_values]
                         
@@ -311,13 +319,34 @@ with gr.Blocks(css=custom_css) as iface:
                         interactive=True,
                         row_count=1,
                         col_count=(len(input_values) + len(output_values), "fixed"),
-                        visible=False,
-                        label="Example Data"
+                        visible=file_data is not None,  # Only visible if file_data is not None
+                        label="Example Data",
+                        value=file_data if file_data is not None else pd.DataFrame(columns=headers)
                     )
-                    export_csv_btn = gr.Button("Export to CSV", visible=False)
+                    export_csv_btn = gr.Button("Export to CSV", interactive=file_data is not None and len(input_values) > 0 and len(output_values) > 0)
                     csv_download = gr.File(label="Download CSV", visible=False)
                     error_message = gr.Markdown()
                     
+                    def show_dataframe(*args):
+                        # Correctly assign input and output fields based on the actual arguments
+                        input_fields = []
+                        output_fields = []
+                        filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                        input_names = [name for name, _ in input_values]
+                        for arg in filtered_args:
+                            if arg and isinstance(arg, str) and arg.strip():
+                                if len(input_fields) < len(input_names):
+                                    input_fields.append(arg)
+                                elif len(output_fields) < len(output_values):
+                                    output_fields.append(arg)
+
+                        headers = input_fields + output_fields
+                        
+                        # Create a new dataframe with the correct headers
+                        new_df = pd.DataFrame(columns=headers)
+                        
+                        return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True)
+
                     enter_manually_btn.click(
                         show_dataframe,
                         inputs=inputs + outputs,
@@ -328,9 +357,6 @@ with gr.Blocks(css=custom_css) as iface:
                         inputs=[upload_csv_btn] + inputs + outputs,
                         outputs=[example_data, example_data, compile_button, error_message]
                     )
-
-                    
-                    
 
                     export_csv_btn.click(
                         export_to_csv,
@@ -411,26 +437,6 @@ with gr.Blocks(css=custom_css) as iface:
                 optimized_prompt = gr.Textbox(label="Optimized Prompt", info="The optimized prompt generated by the DSPy compiler for your program.")
                 usage_instructions = gr.Textbox(label="Usage Instructions", info="Instructions on how to use your compiled DSPy program.")
 
-            def show_dataframe(*args):
-                # Correctly assign input and output fields based on the actual arguments
-                input_fields = []
-                output_fields = []
-                filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
-                input_names = [name for name, _ in input_values.value]
-                for arg in filtered_args:
-                    if arg and isinstance(arg, str) and arg.strip():
-                        if len(input_fields) < len(input_names):
-                            input_fields.append(arg)
-                        elif len(output_fields) < len(output_values):
-                            output_fields.append(arg)
-
-                headers = input_fields + output_fields
-                
-                # Create a new dataframe with the correct headers
-                new_df = pd.DataFrame(columns=headers)
-                
-                return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True)
-
             def process_csv(file, *args):
                 if file is not None:
                     try:
@@ -454,12 +460,6 @@ with gr.Blocks(css=custom_css) as iface:
                         return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
                 return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
 
-            def export_to_csv(data):
-                df = pd.DataFrame(data)
-                filename = "exported_data.csv"
-                df.to_csv(filename, index=False)
-                return filename
-
             # Function to show/hide the hint textbox based on the selected module
             def update_hint_visibility(module):
                 return gr.update(visible=module == "ChainOfThoughtWithHint")
@@ -474,17 +474,18 @@ with gr.Blocks(css=custom_css) as iface:
             example1.click(
                 lambda _: (
                     gr.update(value="Rate whether a joke is funny"),
-                    gr.update(value="BootstrapFewShot"),
+                    gr.update(value="BootstrapFewShotWithRandomSearch"),
                     gr.update(value="Exact Match"),
                     gr.update(value="gpt-4o-mini"),
                     gr.update(value="gpt-4o"),
                     gr.update(value="ChainOfThought"),
                     [("joke", "The joke to be rated"), ("topic", "The topic of the joke")],
                     [("funny", "Whether the joke is funny or not, 1 or 0.")],
-                    *disable_example_buttons()
+                    *disable_example_buttons(),
+                    load_csv("rating_jokes.csv")
                 ),
                 inputs=[gr.State(None)],
-                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3]
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data]
             )
 
             example2.click(
@@ -497,26 +498,28 @@ with gr.Blocks(css=custom_css) as iface:
                     gr.update(value="Predict"),
                     [("topic", "The topic of the joke")],
                     [("joke", "The funny joke")],
-                    *disable_example_buttons()
+                    *disable_example_buttons(),
+                    load_csv("telling_jokes.csv")
                 ),
                 inputs=[gr.State(None)],
-                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3]
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data]
             )
 
             example3.click(
                 lambda _: (
                     gr.update(value="Rewrite in a comedian's style"),
-                    gr.update(value="BootstrapFewShotWithRandomSearch"),
+                    gr.update(value="BootstrapFewShot"),
                     gr.update(value="Cosine Similarity"),
                     gr.update(value="claude-3-haiku-20240307"),
                     gr.update(value="claude-3-sonnet-20240229"),
                     gr.update(value="Predict"),
                     [("joke", "The joke to be rewritten"), ("comedian", "The comedian the joke should be rewritten in the style of")],
                     [("rewritten_joke", "The rewritten joke")],
-                    *disable_example_buttons()
+                    *disable_example_buttons(),
+                    load_csv("rewriting_jokes.csv")
                 ),
                 inputs=[gr.State(None)],
-                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3]
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data]
             )
 
             

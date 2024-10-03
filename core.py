@@ -431,3 +431,19 @@ def list_prompts(signature_filter=None, output_filter=None):
     
     print(f"Found {len(prompt_details)} saved prompts")
     return prompt_details  # Return the list of prompts as dictionaries
+
+def load_example_csv(example_name):
+    csv_path = f"example_data/{example_name}.csv"
+    try:
+        df = pd.read_csv(csv_path)
+        return df
+    except FileNotFoundError:
+        print(f"CSV file not found: {csv_path}")
+        return None
+
+
+def export_to_csv(data):
+    df = pd.DataFrame(data)
+    filename = "exported_data.csv"
+    df.to_csv(filename, index=False)
+    return filename
