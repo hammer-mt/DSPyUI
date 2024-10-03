@@ -31,6 +31,9 @@ custom_css = """
   bottom: 10px !important;
   right: 10px !important;
 }
+.red-text {
+  color: red !important;
+}
 """
 
 with gr.Blocks(css=custom_css) as iface:
@@ -68,11 +71,14 @@ with gr.Blocks(css=custom_css) as iface:
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Inputs")
+                    gr.Markdown("Add input fields for your task. Each input field represents a piece of information your DSPy program will receive.")
                     with gr.Row():
                         add_input_btn = gr.Button("Add Input Field")
                         remove_input_btn = gr.Button("Remove Last Input", interactive=False)
+
                 with gr.Column():
                     gr.Markdown("### Outputs")
+                    gr.Markdown("Add output fields for your task. Each output field represents a piece of information your DSPy program will generate.")
                     with gr.Row():  
                         add_output_btn = gr.Button("Add Output Field")
                         remove_output_btn = gr.Button("Remove Last Output", interactive=False)
@@ -123,6 +129,9 @@ with gr.Blocks(css=custom_css) as iface:
                 outputs = []
                 with gr.Row():
                     with gr.Column():
+                        if not input_values:
+                            gr.Markdown("Please add at least one input field.", elem_classes="red-text")
+   
                         for i, input_value in enumerate(input_values):
                             name, desc = input_value
                             with gr.Group():
@@ -148,7 +157,7 @@ with gr.Blocks(css=custom_css) as iface:
                                     interactive=True,
                                     visible=False
                                 )
-                                desc_visible = gr.State(lambda: bool(desc))
+                                desc_visible = gr.State(False)
                                 expand_btn.click(
                                     lambda v: (not v, gr.update(visible=not v)),
                                     inputs=[desc_visible],
@@ -157,6 +166,10 @@ with gr.Blocks(css=custom_css) as iface:
                                 inputs.extend([input_name, input_desc, desc_visible])
                     
                     with gr.Column():
+                        
+                        if not output_values:
+                            gr.Markdown("Please add at least one output field.", elem_classes="red-text")
+           
                         for i, output_value in enumerate(output_values):
                             name, desc = output_value
                             with gr.Group():
@@ -182,7 +195,7 @@ with gr.Blocks(css=custom_css) as iface:
                                     visible=False,
                                     interactive=True,
                                 )
-                                desc_visible = gr.State(lambda: bool(desc))
+                                desc_visible = gr.State(False)
                                 expand_btn.click(
                                     lambda v: (not v, gr.update(visible=not v)),
                                     inputs=[desc_visible],
@@ -305,6 +318,7 @@ with gr.Blocks(css=custom_css) as iface:
                         return signature, evaluation_score, optimized_prompt, usage_instructions
                     
                 gr.Markdown("### Data")
+                gr.Markdown("Provide example data for your task. This will help the DSPy compiler understand the format of your data. You can either enter the data manually or upload a CSV file with the correct column headers.")
                 with gr.Column():
                     with gr.Row():
                         enter_manually_btn = gr.Button("Enter manually", interactive=len(input_values) > 0 and len(output_values) > 0)
@@ -380,7 +394,7 @@ with gr.Blocks(css=custom_css) as iface:
                     "claude-3-5-sonnet-20240620", "claude-3-opus-20240229",
                     "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
                     "mixtral-8x7b-32768", "gemma-7b-it", "llama3-70b-8192",
-                    "llama3-8b-8192", "gemma2-9b-it"
+                    "llama3-8b-8192", "gemma2-9b-it", "gemini-1.5-flash-8b", "gemini-1.5-flash", "gemini-1.5-pro"
                 ]
                 llm_model = gr.Dropdown(
                     model_options,

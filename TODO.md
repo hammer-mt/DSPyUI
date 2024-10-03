@@ -1,9 +1,12 @@
-- add the ability to run a generate of the compiled prompt
 - support all the various optimizers and modules in the interface: 
     - ProgramOfThought, ReAct, MultiChainComparison, majority
     - BootstrapFineTune, Ensemble, LabeledFewShot
 - add RAG support: Retrieve, Retrieval Model Clients
-- add support for Google Vertex AI
-- ability to load an existing prompt back into the interface to re-run
-- add three examples, one for each Metric option
 - local running of LLM with olama, llama.cpp or lm studio
+
+
+## Launch
+- add the ability to run a generate of the compiled prompt
+- ability to load an existing prompt back into the interface to re-run
+- update for the latest DSPy version / experimental features
+

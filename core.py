@@ -21,6 +21,12 @@ SUPPORTED_GROQ_MODELS = [
     "gemma2-9b-it"
 ]
 
+SUPPORTED_GOOGLE_MODELS = [
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+]
+
 # when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
 lm = dspy.OpenAI(model="gpt-4o-mini")
 dspy.configure(lm=lm)
@@ -114,6 +120,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         lm = dspy.Claude(model=llm_model)
     elif llm_model in SUPPORTED_GROQ_MODELS:
         lm = dspy.GROQ(model=llm_model, api_key=os.environ.get("GROQ_API_KEY"))
+    elif llm_model in SUPPORTED_GOOGLE_MODELS:
+        lm = dspy.GoogleGenerativeAI(model=llm_model, api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -130,6 +138,8 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         teacher_lm = dspy.Claude(model=teacher_model)
     elif teacher_model in SUPPORTED_GROQ_MODELS:
         teacher_lm = dspy.GROQ(model=teacher_model, api_key=os.environ.get("GROQ_API_KEY"))
+    elif teacher_model in SUPPORTED_GOOGLE_MODELS:
+        teacher_lm = dspy.GoogleGenerativeAI(model=teacher_model, api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
