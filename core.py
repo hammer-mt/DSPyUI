@@ -385,3 +385,49 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         usage_instructions += example_output
 
     return usage_instructions, final_prompt
+
+# Function to list prompts
+def list_prompts(signature_filter=None, output_filter=None):
+    
+    if not os.path.exists('prompts'):
+        print("Prompts directory does not exist")
+        return []
+    
+    files = os.listdir('prompts')
+    if not files:
+        print("No prompt files found in the prompts directory")
+        return []
+    
+    prompt_details = []
+    for file in files:
+        if file.endswith('.json'):
+            with open(os.path.join('prompts', file), 'r') as f:
+                data = json.load(f)
+                prompt_id = file
+                signature = f"{', '.join(data['input_fields'])} -> {', '.join(data['output_fields'])}"
+                
+                input_signature = f"{', '.join(data['input_fields'])}"
+                
+                eval_score = data.get('evaluation_score', 'N/A')
+                # Exclude example data
+                details = {k: v for k, v in data.items() if k != 'example_data'}
+                
+                # Check if signature_filter is provided and matches
+                if signature_filter and signature_filter.lower() not in signature.lower():
+                    print(f"Skipping file {file} due to signature mismatch")
+                    continue
+
+                # Check if output_filter is provided and matches
+                if output_filter:
+                    if not all(filter_item.lower() in input_signature.lower() for filter_item in output_filter):
+                        continue
+                
+                prompt_details.append({
+                    "ID": prompt_id,
+                    "Signature": signature,
+                    "Eval Score": eval_score,
+                    "Details": json.dumps(details, indent=4)  # Add full details as a JSON string
+                })
+    
+    print(f"Found {len(prompt_details)} saved prompts")
+    return prompt_details  # Return the list of prompts as dictionaries
