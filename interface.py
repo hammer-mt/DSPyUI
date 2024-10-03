@@ -106,7 +106,7 @@ with gr.Blocks(css=custom_css) as iface:
                     gr.Markdown("### Demo Examples:")
                     with gr.Row():  
                         example1 = gr.Button("Train an LLM Judge")
-                        example2 = gr.Button("Optimize with a Judge")
+                        example2 = gr.Button("Optimize with Judge")
                         example3 = gr.Button("Fuzzy match evals")
             
             # Task Instructions
@@ -119,12 +119,6 @@ with gr.Blocks(css=custom_css) as iface:
                         info="Provide clear and comprehensive instructions for the task. This will guide the DSPy program in understanding the specific requirements and expected outcomes.",
                         interactive=True  # Add this line to ensure the textbox is editable
                     )
-            
-                    
-
-            example1.click(lambda: gr.update(value="Rate whether a joke is funny"), outputs=instructions)
-            example2.click(lambda: gr.update(value="Tell me a funny joke"), outputs=instructions)
-            example3.click(lambda: gr.update(value="Rewrite in a comedian's style"), outputs=instructions)
 
             input_values = gr.State(["Input1"])
             output_values = gr.State(["Output1"])
@@ -510,6 +504,45 @@ with gr.Blocks(css=custom_css) as iface:
                     inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox]),
                     outputs=[signature, evaluation_score, optimized_prompt, usage_instructions]
                 )
+                example1.click(
+                    lambda _: (
+                        gr.update(value="Rate whether a joke is funny"),
+                        gr.update(value="BootstrapFewShot"),
+                        gr.update(value="Exact Match"),
+                        gr.update(value="gpt-4o-mini"),
+                        gr.update(value="gpt-4o"),
+                        gr.update(value="ChainOfThought")
+                    ),
+                    inputs=[gr.State(None)],  # Add a dummy input
+                    outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module]
+                )
+
+                example2.click(
+                    lambda _: (
+                        gr.update(value="Tell me a funny joke"),
+                        gr.update(value="MIPROv2"),
+                        gr.update(value="LLM-as-a-Judge"),
+                        gr.update(value="gpt-4o-mini"),
+                        gr.update(value="gpt-4o"),
+                        gr.update(value="Predict")
+                    ),
+                    inputs=[gr.State(None)],  # Add a dummy input
+                    outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module]
+                )
+
+                example3.click(
+                    lambda _: (
+                        gr.update(value="Rewrite in a comedian's style"),
+                        gr.update(value="BootstrapFewShotWithRandomSearch"),
+                        gr.update(value="Cosine Similarity"),
+                        gr.update(value="claude-3-haiku-20240307"),
+                        gr.update(value="claude-3-sonnet-20240229"),
+                        gr.update(value="Predict")
+                    ),
+                    inputs=[gr.State(None)],  # Add a dummy input
+                    outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module]
+                )
+            
 
         with gr.TabItem("View Prompts"):
             
