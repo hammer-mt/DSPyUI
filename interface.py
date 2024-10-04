@@ -2,9 +2,9 @@ import gradio as gr
 import pandas as pd
 import json
 import os
-import glob
+import random
 
-from core import compile_program, list_prompts, export_to_csv
+from core import compile_program, list_prompts, export_to_csv, generate_program_response
 
 
 # Gradio interface
@@ -124,9 +124,12 @@ with gr.Blocks(css=custom_css) as iface:
                 except Exception as e:
                     print(f"Error loading CSV: {e}")
                     return None
+                
+            row_choice_options = gr.State([])
 
             @gr.render(inputs=[input_values, output_values, file_data])
             def render_variables(input_values, output_values, file_data):
+                
                 inputs = []
                 outputs = []
                 with gr.Row():
@@ -232,6 +235,11 @@ with gr.Blocks(css=custom_css) as iface:
                         inputs=[metric_type] + inputs + outputs,
                         outputs=[judge_prompt]
                     )
+                    random_row_button.click(
+                        select_random_row,
+                        inputs=[row_choice_options],
+                        outputs=[row_selector]
+                    )
 
                     def compile(data):
                         input_fields = []
@@ -283,6 +291,13 @@ with gr.Blocks(css=custom_css) as iface:
                         # Remove the evaluation score line from usage_instructions
                         usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Evaluation score:")])
 
+                        # Extract baseline score from usage_instructions
+                        baseline_score_line = [line for line in usage_instructions.split('\n') if line.startswith("Baseline score:")][0]
+                        baseline_score = float(baseline_score_line.split(":")[1].strip())
+
+                        # Remove the baseline score line from usage_instructions
+                        usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Baseline score:")])
+
                         # Extract human-readable ID from usage_instructions
                         human_readable_id = None
                         for line in usage_instructions.split('\n'):
@@ -306,10 +321,13 @@ with gr.Blocks(css=custom_css) as iface:
                             "instructions": data[instructions],
                             "signature": signature,
                             "evaluation_score": evaluation_score,
+                            "baseline_score": baseline_score,
                             "optimized_prompt": optimized_prompt,
                             "usage_instructions": usage_instructions,
                             "human_readable_id": human_readable_id
                         }
+
+                        row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
                         
                         # Create 'prompts' folder if it doesn't exist
                         if not os.path.exists('prompts'):
@@ -319,7 +337,7 @@ with gr.Blocks(css=custom_css) as iface:
                         json_filename = f"prompts/{human_readable_id}.json"
                         with open(json_filename, 'w') as f:
                             json.dump(details, f, indent=4)
-                        return signature, evaluation_score, optimized_prompt
+                        return signature, evaluation_score, optimized_prompt, gr.update(choices=row_choice_options, visible=True, value="Row 1"), gr.update(visible=True), row_choice_options, gr.update(visible=True), gr.update(visible=True), human_readable_id, gr.update(visible=True), baseline_score
                     
                 gr.Markdown("### Data")
                 gr.Markdown("Provide example data for your task. This will help the DSPy compiler understand the format of your data. You can either enter the data manually or upload a CSV file with the correct column headers.")
@@ -384,11 +402,17 @@ with gr.Blocks(css=custom_css) as iface:
                         lambda: gr.update(visible=True),
                         outputs=[csv_download]
                     )
-
+                
                 compile_button.click(
                     compile,
                     inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox]),
-                    outputs=[signature, evaluation_score, optimized_prompt]
+                    outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score]
+                )
+
+                generate_button.click(
+                    lambda human_readable_id, row_selector, df: generate_program_response(human_readable_id, df.iloc[int(row_selector.split()[1]) - 1].to_dict()),
+                    inputs=[human_readable_id, row_selector, example_data],
+                    outputs=[generate_output]
                 )
 
             gr.Markdown("### Settings")
@@ -428,7 +452,7 @@ with gr.Blocks(css=custom_css) as iface:
 
             with gr.Row():
                 optimizer = gr.Dropdown(
-                    ["None", "BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
+                    ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
                     label="Optimizer",
                     value="BootstrapFewShot",
                     info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
@@ -450,9 +474,41 @@ with gr.Blocks(css=custom_css) as iface:
             compile_button = gr.Button("Compile Program", visible=False, variant="primary")
             with gr.Column() as compilation_results:
                 gr.Markdown("### Results")
-                signature = gr.Textbox(label="Signature", interactive=False, info="The compiled signature of your DSPy program, showing inputs and outputs.")
-                evaluation_score = gr.Number(label="Evaluation Score", info="The evaluation score of your compiled DSPy program.")
-                optimized_prompt = gr.Textbox(label="Optimized Prompt", info="The optimized prompt generated by the DSPy compiler for your program.")
+                
+                with gr.Row():
+                    signature = gr.Textbox(label="Signature", interactive=False, info="The compiled signature of your DSPy program, showing inputs and outputs.")
+                    evaluation_score = gr.Number(label="Evaluation Score", info="The evaluation score of your compiled DSPy program.", interactive=False)
+                    baseline_score = gr.Number(label="Baseline Score", info="The baseline score of your unoptimized DSPy module.", interactive=False)
+                    
+                optimized_prompt = gr.Textbox(label="Optimized Prompt", info="The optimized prompt generated by the DSPy compiler for your program.", interactive=False)
+
+            with gr.Row():
+
+                # Add a dropdown to select a row from the dataset
+                with gr.Column(scale=1):
+                    human_readable_id = gr.Textbox(interactive=False, visible=False)
+                    row_selector = gr.Dropdown(
+                        choices=[],
+                        label="Select a row from the dataset",
+                        interactive=True,
+                        visible=False,
+                        info="Choose a specific row from the loaded dataset to use as input for your compiled program."
+                    )
+                    random_row_button = gr.Button("Select Random Row", visible=False, interactive=True)
+                    generate_button = gr.Button("Generate", interactive=True, visible=False, variant="primary")
+
+
+                    
+
+                with gr.Column(scale=2):
+                    
+                    generate_output = gr.Textbox(label="Generated Response", info="The input and output generated by your compiled DSPy program.", interactive=False, lines=10, visible=False)
+
+                def select_random_row(row_choice_options):                    
+                    if row_choice_options:
+                        random_choice = random.choice(row_choice_options)
+                        return gr.update(value=random_choice, visible=True)
+                    return gr.update(visible=True)
 
             def process_csv(file, *args):
                 if file is not None:

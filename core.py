@@ -323,11 +323,12 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Use a single thread for evaluation
     kwargs = dict(num_threads=1, display_progress=True, display_table=1)
 
+    # Evaluate the module to establish a baseline
+    baseline_evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
+    baseline_score = baseline_evaluate(module)
+
     # Set up the optimizer
-    if optimizer == "None":
-        # Skip compilation, use the module as-is
-        compiled_program = module
-    elif optimizer == "BootstrapFewShot":
+    if optimizer == "BootstrapFewShot":
         teleprompter = BootstrapFewShot(metric=metric, teacher_settings=dict(lm=teacher_lm))
         compiled_program = teleprompter.compile(module, trainset=trainset)
     elif optimizer == "BootstrapFewShotWithRandomSearch":
@@ -374,6 +375,15 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     # Generate a human-readable ID for the compiled program
     human_readable_id = generate_human_readable_id(input_fields, output_fields, dspy_module, llm_model, teacher_model, optimizer, instructions)
 
+    # Create datasets folder if it doesn't exist
+    os.makedirs('datasets', exist_ok=True)
+
+    # Save the dataframe to the datasets folder
+    dataset_path = os.path.join('datasets', f"{human_readable_id}.csv")
+    example_data.to_csv(dataset_path, index=False)
+    print(f"Dataset saved to {dataset_path}")
+
+
     # Create 'programs' folder if it doesn't exist
     os.makedirs('programs', exist_ok=True)
 
@@ -382,6 +392,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
 
     usage_instructions = f"""Program compiled successfully!
 Evaluation score: {score}
+Baseline score: {baseline_score}
 The compiled program has been saved as 'programs/{human_readable_id}.json'.
 You can now use the compiled program as follows:
 
@@ -470,3 +481,63 @@ def export_to_csv(data):
     filename = "exported_data.csv"
     df.to_csv(filename, index=False)
     return filename
+
+
+# function to take a program from the program folder and run it on a row from the dataset
+def generate_program_response(human_readable_id, row_data):
+    # Load the program details
+    program_path = f"programs/{human_readable_id}.json"
+
+    print("program_path:", program_path)
+    
+    if not os.path.exists(program_path):
+        raise ValueError(f"Compiled program not found: {program_path}")
+    
+    with open(program_path, 'r') as f:
+        program_details = json.load(f)
+    
+    # Extract necessary information from program details
+    input_fields = program_details.get('input_fields', [])
+    output_fields = program_details.get('output_fields', [])
+    dspy_module = program_details.get('dspy_module', 'Predict')
+    instructions = program_details.get('instructions', '')
+    
+    # Create the custom signature
+    CustomSignature = create_custom_signature(input_fields, output_fields, instructions, [], [])
+    
+    # Create the program
+    program = create_dspy_module(dspy_module, CustomSignature)
+
+    print("program:", program)
+    
+    # Load the compiled program
+    program.load(program_path)
+    
+    # Prepare input for the program
+    program_input = {}
+    for field in input_fields:
+        if field in row_data:
+            program_input[field] = row_data[field]
+        else:
+            print(f"Warning: Required input field '{field}' not found in row_data")
+            program_input[field] = ""  # or some default value
+    
+    # Run the program
+    result = program(**program_input)
+
+    print("Result:", result)
+
+    # Prepare the output
+    output = "Input:\n"
+    for field in input_fields:
+        output += f"{field}: {program_input[field]}\n"
+
+    print("output:", output)
+    
+    output += "\nOutput:\n"
+    for field in output_fields:
+        output += f"{field}: {getattr(result, field)}\n"
+    
+    print("output 2:", output)
+    
+    return output

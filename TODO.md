@@ -1,5 +1,9 @@
 ## Launch
 - add the ability to run a generate of the compiled prompt
+- remove none for optimizers and instead set a baseline
+
+## Bugs
+- AttributeError: 'NoneType' object has no attribute 'headers'
 
 ## Backlog
 - update for the latest DSPy version / experimental features
@@ -9,5 +13,5 @@
     - BootstrapFineTune, Ensemble, LabeledFewShot
 - add RAG support: Retrieve, Retrieval Model Clients
 - local running of LLM with olama, llama.cpp or lm studio
-- remove none for optimizers and instead set a baseline
 - ability to load an existing prompt back into the interface to re-run
+- consolidate the output of the program to a single file

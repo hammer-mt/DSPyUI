@@ -1,5 +1,5 @@
 # DSPyUI
 
-a Gradio user interface for DSPy.
+A Gradio user interface for DSPy.
 
 `bash webui.sh`

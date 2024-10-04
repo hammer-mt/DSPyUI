@@ -170,3 +170,4 @@ programs/
 .cursorrules
 notes/
 *.ipynb
+datasets/
