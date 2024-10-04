@@ -11,3 +11,4 @@
 - local running of LLM with olama, llama.cpp or lm studio
 - ability to load an existing prompt back into the interface to re-run
 - consolidate the output of the program to a single file
+- run the evaluation of the program in the generate interface

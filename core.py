@@ -489,13 +489,14 @@ def export_to_csv(data):
 def generate_program_response(human_readable_id, row_data):
     # Load the program details
     program_path = f"programs/{human_readable_id}.json"
+    prompt_path = f"prompts/{human_readable_id}.json"
 
     print("program_path:", program_path)
     
     if not os.path.exists(program_path):
         raise ValueError(f"Compiled program not found: {program_path}")
 
-    with open(program_path, 'r') as f:
+    with open(prompt_path, 'r') as f:
         program_details = json.load(f)
     
     # Extract necessary information from program details
@@ -505,7 +506,14 @@ def generate_program_response(human_readable_id, row_data):
     output_descs = program_details.get('output_descs', [])
     dspy_module = program_details.get('dspy_module', 'Predict')
     instructions = program_details.get('instructions', '')
-    
+
+    print("input_fields:", input_fields)
+    print("output_fields:", output_fields)
+    print("instructions:", instructions)
+    print("input_descs:", input_descs)
+    print("output_descs:", output_descs)
+    print("dspy_module:", dspy_module)
+
     # Create the custom signature
     CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs, output_descs)
     print("CustomSignature:", CustomSignature)
