@@ -325,9 +325,9 @@ with gr.Blocks(css=custom_css) as iface:
                 gr.Markdown("Provide example data for your task. This will help the DSPy compiler understand the format of your data. You can either enter the data manually or upload a CSV file with the correct column headers.")
                 with gr.Column():
                     with gr.Row():
-                        enter_manually_btn = gr.Button("Enter manually", interactive=len(input_values) > 0 and len(output_values) > 0)
+                        enter_manually_btn = gr.Button("Enter manually", interactive=len(input_values) > 0 and len(output_values) > 0 and file_data is None)
                         
-                        upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"], interactive=len(input_values) > 0 and len(output_values) > 0)
+                        upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"], interactive=len(input_values) > 0 and len(output_values) > 0 and file_data is None)
 
                     headers = [input_value[0] for input_value in input_values] + [output_value[0] for output_value in output_values]
                         
@@ -363,17 +363,17 @@ with gr.Blocks(css=custom_css) as iface:
                         # Create a new dataframe with the correct headers
                         new_df = pd.DataFrame(columns=headers)
                         
-                        return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True)
+                        return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(interactive=False), gr.update(interactive=False)
 
                     enter_manually_btn.click(
                         show_dataframe,
                         inputs=inputs + outputs,
-                        outputs=[example_data, export_csv_btn, compile_button]
+                        outputs=[example_data, export_csv_btn, compile_button, enter_manually_btn, upload_csv_btn]
                     )
                     upload_csv_btn.upload(
                         process_csv,
                         inputs=[upload_csv_btn] + inputs + outputs,
-                        outputs=[example_data, example_data, compile_button, error_message]
+                        outputs=[example_data, example_data, compile_button, error_message, enter_manually_btn, upload_csv_btn]
                     )
 
                     export_csv_btn.click(
@@ -475,7 +475,7 @@ with gr.Blocks(css=custom_css) as iface:
                         return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
                     except Exception as e:
                         return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
-                return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False)
+                return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(interactive=False), gr.update(interactive=False)
 
             # Function to show/hide the hint textbox based on the selected module
             def update_hint_visibility(module):
