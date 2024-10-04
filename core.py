@@ -211,13 +211,22 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         if judge_prompt_id is None:
             raise ValueError("Judge prompt ID is required for LLM-as-a-Judge metric")
         
+        example2_id = "JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003.json"
+        
         # Load the judge prompt details
-        judge_prompt_path = f"prompts/{judge_prompt_id}.json"
+        if judge_prompt_id == example2_id:
+            judge_prompt_path = f"example_data/{judge_prompt_id}"
+        else:
+            judge_prompt_path = f"prompts/{judge_prompt_id}.json"
+        
         if not os.path.exists(judge_prompt_path):
             raise ValueError(f"Judge prompt not found: {judge_prompt_path}")
         
         with open(judge_prompt_path, 'r') as f:
             judge_prompt_details = json.load(f)
+
+        print("Judge Prompt Path:", judge_prompt_path)
+        print("Judge Prompt Details:", judge_prompt_details)
         
         judge_input_fields = judge_prompt_details.get('input_fields', [])
         judge_output_fields = judge_prompt_details.get('output_fields', [])
@@ -241,7 +250,11 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         print(judge_program)
         
         # Load the compiled judge program
-        judge_program_path = f"programs/{judge_human_readable_id}.json"
+        if judge_prompt_id == example2_id:
+            judge_program_path = f"example_data/{judge_human_readable_id}-program.json"
+        else:
+            judge_program_path = f"programs/{judge_human_readable_id}.json"
+        
         if not os.path.exists(judge_program_path):
             raise ValueError(f"Compiled judge program not found: {judge_program_path}")
         

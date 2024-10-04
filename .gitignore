@@ -164,7 +164,8 @@ flagged/
 local_cache/
 exported_data.csv
 testing.ipynb
-*.json
+prompts/
+programs/
 .DS_Store
 .cursorrules
 notes/

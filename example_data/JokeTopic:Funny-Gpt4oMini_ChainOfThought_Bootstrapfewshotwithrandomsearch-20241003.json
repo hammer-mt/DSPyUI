@@ -1,0 +1,26 @@
+{
+    "input_fields": [
+        "joke",
+        "topic"
+    ],
+    "input_descriptions": [
+        "The joke to be rated",
+        "The topic of the joke"
+    ],
+    "output_fields": [
+        "funny"
+    ],
+    "output_descriptions": [
+        "Whether the joke is funny or not, 1 or 0."
+    ],
+    "dspy_module": "ChainOfThought",
+    "llm_model": "gpt-4o-mini",
+    "teacher_model": "gpt-4o",
+    "optimizer": "BootstrapFewShotWithRandomSearch",
+    "instructions": "Rate whether a joke is funny",
+    "signature": "joke, topic -> funny",
+    "evaluation_score": 100.0,
+    "optimized_prompt": "Rate whether a joke is funny\n\n---\n\nFollow the following format.\n\nJoke: The joke to be rated\n\nTopic: The topic of the joke\n\nReasoning: Let's think step by step in order to ${produce the funny}. We ...\n\nFunny: Whether the joke is funny or not, 1 or 0.\n\n---\n\nJoke: How do you make a tissue dance? Put a little boogie in it!\n\nTopic: music\n\nReasoning: Let's think step by step in order to produce the funny. We start by identifying the play on words in the joke. The joke uses the word \"boogie,\" which can refer to both a piece of nasal mucus and a style of dance. The humor comes from the unexpected combination of these two meanings, creating a mental image of a tissue dancing. This clever wordplay and the absurdity of the situation contribute to the joke's humor.\n\nFunny: 1\n\n---\n\nJoke: How do you organize a space party? You planet!\n\nTopic: space\n\nReasoning: Let's think step by step in order to produce the funny. We start by identifying the play on words in the joke. The word \"planet\" sounds like \"plan it,\" which is a clever pun related to organizing a party. The humor comes from the unexpected twist of using a space-related term in a context that is typically unrelated to space. This wordplay is light-hearted and clever, making it amusing to many people.\n\nFunny: 1\n\n---\n\nJoke: How do you catch a squirrel? Climb a tree and act like a nut!\nTopic: animals\nFunny: 0\n\n---\n\nJoke: Why don't scientists trust atoms? They make up everything!\nTopic: science\nFunny: 1\n\n---\n\nJoke: What do you call a can opener that doesn't work? A can't opener!\nTopic: kitchen\nFunny: 0\n\n---\n\nJoke: What do you call a sleeping bull? A bulldozer!\nTopic: animals\nFunny: 1\n\n---\n\nJoke: What do you call a fake noodle? An impasta!\nTopic: food\nFunny: 1\n\n---\n\nJoke: How do you make a tissue dance? Put a little boogie in it!\nTopic: music\nFunny: 1\n\n---\n\nJoke: Why don't skeletons fight each other? They don't have the guts!\nTopic: anatomy\nFunny: 1\n\n---\n\nJoke: What do you call a can opener that doesn't work? A can't opener!\nTopic: kitchen\nFunny: 0\n\n---\n\nJoke: Why don't eggs tell jokes? They'd crack each other up!\nTopic: food\nFunny: 0\n\n---\n\nJoke: What do you call a sleeping bull? A bulldozer!\nTopic: animals\nFunny: 1\n\n---\n\nJoke: Why did the math book look so sad? Because it had too many problems!\nTopic: education\nFunny: 1\n\n---\n\nJoke: Why don't eggs tell jokes? They'd crack each other up!\nTopic: food\nFunny: 0\n\n---\n\nJoke: Why did the cookie go to the doctor? Because it was feeling crumbly!\nTopic: food\nFunny: 0\n\n---\n\nJoke: Why don't skeletons fight each other? They don't have the guts!\nTopic: anatomy\nFunny: 1\n\n---\n\nJoke: Why don't scientists trust atoms? They make up everything!\n\nTopic: science\n\nReasoning: Let's think step by step in order to",
+    "usage_instructions": "Program compiled successfully!\nThe compiled program has been saved as 'programs/JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003.json'.\nYou can now use the compiled program as follows:\n\ncompiled_program = dspy.ChainOfThought(CustomSignature)\ncompiled_program.load('programs/JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003.json')\nresult = compiled_program(joke=value, topic=value)\nprint(result.funny)\n\nExample usage with first row of data:\nInput: {'joke': \"Why don't scientists trust atoms? They make up everything!\", 'topic': 'science'}\nOutput: Prediction(\n    rationale='produce the funny. We start by identifying the clever wordplay in the joke. The phrase \"make up\" can mean to fabricate or lie about something, while in a scientific context, atoms are the fundamental building blocks of matter, meaning they literally \"make up\" everything in the universe. The humor arises from the dual meaning of \"make up,\" creating a surprising and amusing connection between trust and the nature of atoms. This clever twist and the light-hearted nature of the joke contribute to its overall funniness.',\n    funny='1'\n)\n",
+    "human_readable_id": "JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003"
+}

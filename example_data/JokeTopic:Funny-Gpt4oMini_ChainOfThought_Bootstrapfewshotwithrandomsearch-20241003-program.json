@@ -1,0 +1,97 @@
+{
+  "cot": {
+    "lm": null,
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "augmented": true,
+        "joke": "How do you make a tissue dance? Put a little boogie in it!",
+        "topic": "music",
+        "rationale": "produce the funny. We start by identifying the play on words in the joke. The joke uses the word \"boogie,\" which can refer to both a piece of nasal mucus and a style of dance. The humor comes from the unexpected combination of these two meanings, creating a mental image of a tissue dancing. This clever wordplay and the absurdity of the situation contribute to the joke's humor.",
+        "funny": "1"
+      },
+      {
+        "augmented": true,
+        "joke": "How do you organize a space party? You planet!",
+        "topic": "space",
+        "rationale": "produce the funny. We start by identifying the play on words in the joke. The word \"planet\" sounds like \"plan it,\" which is a clever pun related to organizing a party. The humor comes from the unexpected twist of using a space-related term in a context that is typically unrelated to space. This wordplay is light-hearted and clever, making it amusing to many people.",
+        "funny": "1"
+      },
+      {
+        "joke": "How do you catch a squirrel? Climb a tree and act like a nut!",
+        "topic": "animals",
+        "funny": "0"
+      },
+      {
+        "joke": "Why don't scientists trust atoms? They make up everything!",
+        "topic": "science",
+        "funny": "1"
+      },
+      {
+        "joke": "What do you call a can opener that doesn't work? A can't opener!",
+        "topic": "kitchen",
+        "funny": "0"
+      },
+      {
+        "joke": "What do you call a sleeping bull? A bulldozer!",
+        "topic": "animals",
+        "funny": "1"
+      },
+      {
+        "joke": "What do you call a fake noodle? An impasta!",
+        "topic": "food",
+        "funny": "1"
+      },
+      {
+        "joke": "How do you make a tissue dance? Put a little boogie in it!",
+        "topic": "music",
+        "funny": "1"
+      },
+      {
+        "joke": "Why don't skeletons fight each other? They don't have the guts!",
+        "topic": "anatomy",
+        "funny": "1"
+      },
+      {
+        "joke": "What do you call a can opener that doesn't work? A can't opener!",
+        "topic": "kitchen",
+        "funny": "0"
+      },
+      {
+        "joke": "Why don't eggs tell jokes? They'd crack each other up!",
+        "topic": "food",
+        "funny": "0"
+      },
+      {
+        "joke": "What do you call a sleeping bull? A bulldozer!",
+        "topic": "animals",
+        "funny": "1"
+      },
+      {
+        "joke": "Why did the math book look so sad? Because it had too many problems!",
+        "topic": "education",
+        "funny": "1"
+      },
+      {
+        "joke": "Why don't eggs tell jokes? They'd crack each other up!",
+        "topic": "food",
+        "funny": "0"
+      },
+      {
+        "joke": "Why did the cookie go to the doctor? Because it was feeling crumbly!",
+        "topic": "food",
+        "funny": "0"
+      },
+      {
+        "joke": "Why don't skeletons fight each other? They don't have the guts!",
+        "topic": "anatomy",
+        "funny": "1"
+      }
+    ],
+    "signature_instructions": "Rate whether a joke is funny",
+    "signature_prefix": "Funny:",
+    "extended_signature_instructions": "Rate whether a joke is funny",
+    "extended_signature_prefix": "Funny:"
+  }
+}
