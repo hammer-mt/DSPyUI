@@ -1,7 +1,3 @@
-## Launch
-- add the ability to run a generate of the compiled prompt
-- remove none for optimizers and instead set a baseline
-
 ## Bugs
 - AttributeError: 'NoneType' object has no attribute 'headers'
 

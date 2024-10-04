@@ -409,8 +409,13 @@ with gr.Blocks(css=custom_css) as iface:
                     outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score]
                 )
 
+                def generate_response(human_readable_id, row_selector, df):
+                    selected_row = df.iloc[int(row_selector.split()[1]) - 1].to_dict()
+                    print("selected_row:", selected_row)
+                    return generate_program_response(human_readable_id, selected_row)
+
                 generate_button.click(
-                    lambda human_readable_id, row_selector, df: generate_program_response(human_readable_id, df.iloc[int(row_selector.split()[1]) - 1].to_dict()),
+                    generate_response,
                     inputs=[human_readable_id, row_selector, example_data],
                     outputs=[generate_output]
                 )

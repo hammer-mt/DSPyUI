@@ -229,7 +229,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         print("Judge Prompt Details:", judge_prompt_details)
         
         judge_input_fields = judge_prompt_details.get('input_fields', [])
+        judge_input_descs = judge_prompt_details.get('input_descs', [])
         judge_output_fields = judge_prompt_details.get('output_fields', [])
+        judge_output_descs = judge_prompt_details.get('output_descs', [])
         judge_module = judge_prompt_details.get('dspy_module', 'Predict')
         judge_instructions = judge_prompt_details.get('instructions', '')
         judge_human_readable_id = judge_prompt_details.get('human_readable_id')
@@ -238,7 +240,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         print(json.dumps(judge_prompt_details, indent=2))
         
         # Create the custom signature for the judge program
-        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields, judge_instructions, [], [])
+        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields, judge_instructions, judge_input_descs, judge_output_descs)
         
         print("\nJudge Signature:")
         print(JudgeSignature)
@@ -492,28 +494,27 @@ def generate_program_response(human_readable_id, row_data):
     
     if not os.path.exists(program_path):
         raise ValueError(f"Compiled program not found: {program_path}")
-    
+
     with open(program_path, 'r') as f:
         program_details = json.load(f)
     
     # Extract necessary information from program details
     input_fields = program_details.get('input_fields', [])
+    input_descs = program_details.get('input_descs', [])    
     output_fields = program_details.get('output_fields', [])
+    output_descs = program_details.get('output_descs', [])
     dspy_module = program_details.get('dspy_module', 'Predict')
     instructions = program_details.get('instructions', '')
     
     # Create the custom signature
-    CustomSignature = create_custom_signature(input_fields, output_fields, instructions, [], [])
-    
-    # Create the program
-    program = create_dspy_module(dspy_module, CustomSignature)
+    CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs, output_descs)
+    print("CustomSignature:", CustomSignature)
+    compiled_program = create_dspy_module(dspy_module, CustomSignature)
+    print("compiled_program:", compiled_program)
+    compiled_program.load(program_path)
+    print("compiled_program after load:", compiled_program)
 
-    print("program:", program)
-    
-    # Load the compiled program
-    program.load(program_path)
-    
-    # Prepare input for the program
+
     program_input = {}
     for field in input_fields:
         if field in row_data:
@@ -523,21 +524,25 @@ def generate_program_response(human_readable_id, row_data):
             program_input[field] = ""  # or some default value
     
     # Run the program
-    result = program(**program_input)
 
-    print("Result:", result)
+    try:
+        result = compiled_program(**program_input)
+        print("result:", result)
+    except Exception as e:
+        print(f"Error executing program: {str(e)}")
+        return f"Error: {str(e)}"
 
     # Prepare the output
     output = "Input:\n"
     for field in input_fields:
         output += f"{field}: {program_input[field]}\n"
 
-    print("output:", output)
-    
+    print("result:", result)
+
     output += "\nOutput:\n"
     for field in output_fields:
         output += f"{field}: {getattr(result, field)}\n"
-    
-    print("output 2:", output)
-    
+
+    print("output:", output)
+
     return output
