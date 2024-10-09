@@ -58,6 +58,6 @@ fi
 
 # Launch the Gradio app
 echo "Launching DSPy UI..."
-python interface.py
+gradio interface.py
 
 # Note: The cleanup function will be called automatically when the script exits

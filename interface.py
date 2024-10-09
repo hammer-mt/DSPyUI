@@ -38,7 +38,7 @@ custom_css = """
 
 example2_signature = "JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003.json - joke, topic -> funny (Score: 100)"
 
-with gr.Blocks(css=custom_css) as iface:
+with gr.Blocks(css=custom_css) as demo:
 
     # Compile Program Tab
     with gr.Tabs():
@@ -433,26 +433,30 @@ with gr.Blocks(css=custom_css) as iface:
                     model_options,
                     label="Model",
                     value="gpt-4o-mini",
-                    info="Select the main language model for your DSPy program. This model will be used for inference. Typically you want to choose a fast and cheap model here, and train it on your task to improve quality."
+                    info="Select the main language model for your DSPy program. This model will be used for inference. Typically you want to choose a fast and cheap model here, and train it on your task to improve quality.",
+                    interactive=True  # Add this line
                 )
                 teacher_model = gr.Dropdown(
                     model_options,
                     label="Teacher",
                     value="gpt-4o",
-                    info="Select a more capable (but slower and more expensive) model to act as a teacher during the compilation process. This model helps generate high-quality examples and refine prompts."
+                    info="Select a more capable (but slower and more expensive) model to act as a teacher during the compilation process. This model helps generate high-quality examples and refine prompts.",
+                    interactive=True  # Add this line
                 )
                 with gr.Column():
                     dspy_module = gr.Dropdown(
                         ["Predict", "ChainOfThought", "ChainOfThoughtWithHint"],
                         label="Module",
                         value="Predict",
-                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, and ChainOfThoughtWithHint for guided reasoning."
+                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, and ChainOfThoughtWithHint for guided reasoning.",
+                        interactive=True  # This line was likely already present
                     )
                     hint_textbox = gr.Textbox(
                         label="Hint",
                         lines=2,
                         placeholder="Enter a hint for the Chain of Thought with Hint module.",
-                        visible=False
+                        visible=False,
+                        interactive=True  # Add this line
                     )
 
             with gr.Row():
@@ -460,20 +464,23 @@ with gr.Blocks(css=custom_css) as iface:
                     ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPRO", "MIPROv2", "COPRO"],
                     label="Optimizer",
                     value="BootstrapFewShot",
-                    info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions."
+                    info="Choose optimization strategy: None (no optimization), BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPRO, MIPROv2, and COPRO (large, 300+) also optimize the prompt instructions.",
+                    interactive=True  # Add this line
                 )
                 with gr.Column():
                     metric_type = gr.Radio(
                         ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
                         label="Metric",
                         value="Exact Match",
-                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer."
+                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer.",
+                        interactive=True  # Add this line
                     )
                     judge_prompt = gr.Dropdown(
                         choices=[],
                         label="Judge Prompt",
                         visible=False,
-                        info="Select the prompt to use as the judge for evaluation."
+                        info="Select the prompt to use as the judge for evaluation.",
+                        interactive=True  # Add this line
                     )
 
             compile_button = gr.Button("Compile Program", visible=False, variant="primary")
@@ -561,13 +568,15 @@ with gr.Blocks(css=custom_css) as iface:
                     [("joke", "The funny joke")],
                     *disable_example_buttons(),
                     load_csv("telling_jokes.csv"),
-                    gr.update(visible=True)
+                    gr.update(visible=True),
+                    gr.update(visible=True),
+                    gr.update(value=example2_signature, visible=True)  # Update judge_prompt
                 )
 
             example2.click(
                 update_example2,
                 inputs=[],
-                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button]
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button, judge_prompt]
             )
 
             example1.click(
@@ -703,5 +712,5 @@ with gr.Blocks(css=custom_css) as iface:
                         outputs=[selected_prompt, close_details_btn]
                     )
 
-# Launch the interface
-iface.launch()
+if __name__ == "__main__":
+    demo.launch()
