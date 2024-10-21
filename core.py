@@ -414,6 +414,8 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         input_data = {field: first_row[field] for field in input_fields}
         result = compiled_program(**input_data)
         final_prompt = dspy.settings.lm.history[-1]['prompt'] if dspy.settings.lm.history else "No prompt history available"
+
+        print("history:", dspy.settings.lm.inspect_history(n=1))
         
         example_output = f"\nExample usage with first row of data:\n"
         example_output += f"Input: {input_data}\n"
