@@ -2,7 +2,6 @@
 - AttributeError: 'NoneType' object has no attribute 'headers'
 - fn = session_state.blocks_config.fns[body.fn_index]         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
 KeyError: 12
-- DSPY 2.5 broke the way I got the prompt: dspy.settings.lm.history[-1]['prompt'] need to find a fix
 
 ## Backlog
 - add a place to put API keys then push to gradio spaces: https://x.com/victormustar/status/1844844179962450331?t=o-wTXyD8CsXllPfRGN3wMg&s=03

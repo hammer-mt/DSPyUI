@@ -391,6 +391,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
 
     # Save the compiled program
     compiled_program.save(f"programs/{human_readable_id}.json")
+    print(f"Compiled program saved to programs/{human_readable_id}.json")
 
     usage_instructions = f"""Program compiled successfully!
 Evaluation score: {score}
@@ -413,10 +414,11 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         first_row = example_data.iloc[0]
         input_data = {field: first_row[field] for field in input_fields}
         result = compiled_program(**input_data)
-        final_prompt = dspy.settings.lm.history[-1]['prompt'] if dspy.settings.lm.history else "No prompt history available"
+        messages = dspy.settings.lm.history[-1]['messages']
+        final_prompt = ""
+        for msg in messages:
+            final_prompt += f"{msg['content']}\n"
 
-        print("history:", dspy.settings.lm.inspect_history(n=1))
-        
         example_output = f"\nExample usage with first row of data:\n"
         example_output += f"Input: {input_data}\n"
         example_output += f"Output: {result}\n"
