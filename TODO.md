@@ -1,8 +1,11 @@
 ## Bugs
 - AttributeError: 'NoneType' object has no attribute 'headers'
+- fn = session_state.blocks_config.fns[body.fn_index]         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyError: 12
+- description fields aren't clickable for some reason
 
 ## Backlog
-- update for the latest DSPy version / experimental features
+- add a place to put API keys then push to gradio spaces: https://x.com/victormustar/status/1844844179962450331?t=o-wTXyD8CsXllPfRGN3wMg&s=03
 - add cost tracking and prediction of cost to the interface
 - support all the various optimizers and modules in the interface: 
     - ProgramOfThought, ReAct, MultiChainComparison, majority

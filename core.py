@@ -28,7 +28,7 @@ SUPPORTED_GOOGLE_MODELS = [
 ]
 
 # when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
-lm = dspy.OpenAI(model="gpt-4o-mini")
+lm = dspy.LM('openai/gpt-4o-mini')
 dspy.configure(lm=lm)
 
 def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str, input_descs: List[str], output_descs: List[str]):
@@ -115,13 +115,13 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
 def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None) -> str:
     # Set up the LLM model
     if llm_model.startswith("gpt-"):
-        lm = dspy.OpenAI(model=llm_model)
+        lm = dspy.LM(f'openai/{llm_model}')
     elif llm_model.startswith("claude-"):
-        lm = dspy.Claude(model=llm_model)
+        lm = dspy.LM(f'anthropic/{llm_model}')
     elif llm_model in SUPPORTED_GROQ_MODELS:
-        lm = dspy.GROQ(model=llm_model, api_key=os.environ.get("GROQ_API_KEY"))
+        lm = dspy.LM(f'groq/{llm_model}', api_key=os.environ.get("GROQ_API_KEY"))
     elif llm_model in SUPPORTED_GOOGLE_MODELS:
-        lm = dspy.GoogleGenerativeAI(model=llm_model, api_key=os.environ.get("GOOGLE_API_KEY"))
+        lm = dspy.LM(f'google/{llm_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -133,13 +133,13 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
 
     # Set up the teacher model
     if teacher_model.startswith("gpt-"):
-        teacher_lm = dspy.OpenAI(model=teacher_model)
+        teacher_lm = dspy.LM(f'openai/{teacher_model}')
     elif teacher_model.startswith("claude-"):
-        teacher_lm = dspy.Claude(model=teacher_model)
+        teacher_lm = dspy.LM(f'anthropic/{teacher_model}')
     elif teacher_model in SUPPORTED_GROQ_MODELS:
-        teacher_lm = dspy.GROQ(model=teacher_model, api_key=os.environ.get("GROQ_API_KEY"))
+        teacher_lm = dspy.LM(f'groq/{teacher_model}', api_key=os.environ.get("GROQ_API_KEY"))
     elif teacher_model in SUPPORTED_GOOGLE_MODELS:
-        teacher_lm = dspy.GoogleGenerativeAI(model=teacher_model, api_key=os.environ.get("GOOGLE_API_KEY"))
+        teacher_lm = dspy.LM(f'google/{teacher_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
