@@ -161,16 +161,39 @@ DSPyUI maintains high code quality standards:
 ### Testing Infrastructure
 - Automated Gradio test runner (`gradio_test_runner.py`)
 - Playwright end-to-end tests (15/20 passing)
-- Mock data generation for testing
+- REST API testing via Gradio Python Client
+- Mock data generation for realistic testing
 - Comprehensive logging and error tracking
 
 Run tests:
 ```bash
 source dspyui_env/bin/activate
-pytest tests/ -v                    # Run Playwright tests
-python gradio_test_runner.py       # Run with Gradio server
-mypy models.py                     # Type checking
+
+# Run all tests (pytest + REST API)
+python gradio_test_runner.py
+
+# Run only pytest tests
+python gradio_test_runner.py --pytest-only
+
+# Run only REST API tests
+python gradio_test_runner.py --rest-api-tests
+
+# Generate mock data
+python gradio_test_runner.py --generate-mocks
+
+# Run with verbose logging
+python gradio_test_runner.py --verbose
+
+# Type checking
+mypy core.py interface.py gradio_test_runner.py
 ```
+
+The test runner:
+- Starts Gradio server automatically on port 7862
+- Logs all output to `test_logs/run_<timestamp>/`
+- Generates mock CSV datasets for testing
+- Runs Playwright UI tests and REST API tests
+- Aggregates results and creates summary reports
 
 <img width="1561" alt="Screenshot 2025-05-23 at 09 53 48" src="https://github.com/user-attachments/assets/df95d7ee-c605-47cc-a389-19cdd67f7a02" />
 <img width="1561" alt="Screenshot 2025-05-23 at 09 54 33" src="https://github.com/user-attachments/assets/e3cea6f3-68eb-4c48-bb6d-c5ef01eba827" />
