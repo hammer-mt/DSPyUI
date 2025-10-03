@@ -39,20 +39,25 @@ class TestInputOutputFields:
         # Add one input field
         add_input = page.locator("button", has_text="Add Input Field")
         add_input.click()
-        page.wait_for_timeout(500)
+
+        # Wait for the input field to appear and be ready
+        page.wait_for_timeout(1000)
+
+        # Fill in the first input field name (placeholder is "Input1")
+        # Use a more flexible selector that waits for the element
+        input_field = page.locator("input[placeholder='Input1']").first
+        input_field.wait_for(state="visible", timeout=5000)
+        input_field.fill("question")
 
         # Add one output field
         add_output = page.locator("button", has_text="Add Output Field")
         add_output.click()
-        page.wait_for_timeout(500)
-
-        # Fill in the first input field name (placeholder is "Input1")
-        input_name_fields = page.locator("input[placeholder='Input1']").first
-        input_name_fields.fill("question")
+        page.wait_for_timeout(1000)
 
         # Fill in the first output field name (placeholder is "Output1")
-        output_name_fields = page.locator("input[placeholder='Output1']").first
-        output_name_fields.fill("answer")
+        output_field = page.locator("input[placeholder='Output1']").first
+        output_field.wait_for(state="visible", timeout=5000)
+        output_field.fill("answer")
 
         # Verify fields are filled
         assert page.locator("input[value='question']").is_visible()
