@@ -4,14 +4,23 @@ A Gradio user interface for DSPy - making DSPy accessible to non-technical users
 
 ## Quick Start
 
+### Local Deployment
+
 ```bash
 bash webui.sh
 ```
+
+### Gradio Spaces (Cloud)
+
+Deploy to Hugging Face Spaces for free cloud hosting! See [README_SPACES.md](README_SPACES.md) for detailed instructions.
+
+[![Deploy to Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/deploy-to-spaces-lg.svg)](https://huggingface.co/spaces)
 
 ## Requirements
 
 - Python 3.10 or higher (required for DSPy 3.0)
 - API keys for LLM providers (OpenAI, Anthropic, Groq, and/or Google)
+  - Can be configured via UI in the **Settings** tab (no .env file needed for Spaces!)
 
 ## Setup
 
@@ -38,6 +47,7 @@ gradio interface.py
 
 - Visual interface for DSPy program compilation
 - **🔗 Chain Builder** - create multi-step DSPy programs by chaining modules together
+- **⚙️ Settings Tab** - configure API keys directly in the UI (no .env file needed!)
 - Support for multiple LLM providers (OpenAI, Anthropic, Groq, Google)
 - **Local LLM support** (LM Studio, Ollama, llama.cpp)
 - Built-in DSPy modules (Predict, ChainOfThought, ChainOfThoughtWithHint, **ProgramOfThought**)
@@ -49,6 +59,7 @@ gradio interface.py
 - Example datasets and pre-compiled programs
 - Export and reuse compiled programs
 - Load existing prompts back into the compiler
+- **Gradio Spaces ready** - deploy to cloud with zero configuration
 
 ## Technology Stack
 
