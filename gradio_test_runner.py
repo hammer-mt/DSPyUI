@@ -34,7 +34,7 @@ import requests
 
 # Try to import gradio_client for REST API testing
 try:
-    from gradio_client import Client, handle_file
+    from gradio_client import Client, handle_file  # type: ignore[import-untyped]
     GRADIO_CLIENT_AVAILABLE = True
 except ImportError:
     GRADIO_CLIENT_AVAILABLE = False
