@@ -84,7 +84,7 @@ class GradioTestRunner:
         # Start Gradio process
         with open(self.gradio_log_file, 'w') as log_file:
             self.gradio_process = subprocess.Popen(
-                ["python", "-m", "gradio", "interface.py"],
+                [sys.executable, "-m", "gradio", "interface.py"],
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 env={
