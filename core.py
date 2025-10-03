@@ -691,6 +691,114 @@ def estimate_compilation_cost(
     }
 
 
+def calculate_actual_cost(
+    student_model: str,
+    teacher_model: str
+) -> Dict[str, Any]:
+    """
+    Calculate actual cost from DSPy LM history.
+
+    Analyzes the DSPy call history to determine actual token usage and costs.
+
+    Args:
+        student_model: Model name used for the student program
+        teacher_model: Model name used for teaching/optimization
+
+    Returns:
+        Dictionary containing:
+        - actual_cost_usd: Total actual cost in USD
+        - input_tokens: Total input tokens used
+        - output_tokens: Total output tokens used
+        - total_tokens: Sum of input and output tokens
+        - breakdown: Dict with per-model cost breakdown
+    """
+    # Get model pricing
+    student_pricing = get_model_pricing(student_model)
+    teacher_pricing = get_model_pricing(teacher_model)
+
+    # Initialize counters
+    total_input_tokens = 0
+    total_output_tokens = 0
+    student_input_tokens = 0
+    student_output_tokens = 0
+    teacher_input_tokens = 0
+    teacher_output_tokens = 0
+
+    # Access DSPy history
+    if not hasattr(dspy.settings, 'lm') or dspy.settings.lm is None:
+        print("Warning: No LM configured in DSPy settings")
+        return {
+            "actual_cost_usd": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "breakdown": {}
+        }
+
+    history = dspy.settings.lm.history
+
+    # Parse history to count tokens
+    # DSPy history format: list of dicts with 'prompt', 'response', 'kwargs', etc.
+    for call in history:
+        # Try to extract token counts from the call
+        # Different LM providers may store this differently
+        input_tokens = 0
+        output_tokens = 0
+
+        # Try to get from response object (OpenAI format)
+        if 'response' in call and hasattr(call['response'], 'usage'):
+            usage = call['response'].usage
+            if hasattr(usage, 'prompt_tokens'):
+                input_tokens = usage.prompt_tokens
+            if hasattr(usage, 'completion_tokens'):
+                output_tokens = usage.completion_tokens
+
+        # Fallback: estimate from text length if no usage data
+        if input_tokens == 0 and 'prompt' in call:
+            # Rough estimate: 1 token ≈ 4 characters
+            input_tokens = len(str(call.get('prompt', ''))) // 4
+
+        if output_tokens == 0 and 'response' in call:
+            response_text = str(call.get('response', ''))
+            if hasattr(call['response'], 'choices'):
+                # OpenAI-style response
+                try:
+                    response_text = call['response'].choices[0].message.content
+                except (AttributeError, IndexError, KeyError):
+                    pass
+            output_tokens = len(response_text) // 4
+
+        # Add to totals
+        total_input_tokens += input_tokens
+        total_output_tokens += output_tokens
+
+        # For now, attribute all calls to student model
+        # In future, could detect teacher calls by inspecting kwargs or model name
+        student_input_tokens += input_tokens
+        student_output_tokens += output_tokens
+
+    # Calculate costs (convert from per-1M to actual)
+    student_input_cost = (student_input_tokens * student_pricing["input"]) / 1_000_000
+    student_output_cost = (student_output_tokens * student_pricing["output"]) / 1_000_000
+    teacher_input_cost = (teacher_input_tokens * teacher_pricing["input"]) / 1_000_000
+    teacher_output_cost = (teacher_output_tokens * teacher_pricing["output"]) / 1_000_000
+
+    total_cost = student_input_cost + student_output_cost + teacher_input_cost + teacher_output_cost
+
+    return {
+        "actual_cost_usd": round(total_cost, 4),
+        "input_tokens": total_input_tokens,
+        "output_tokens": total_output_tokens,
+        "total_tokens": total_input_tokens + total_output_tokens,
+        "breakdown": {
+            "student_input": round(student_input_cost, 4),
+            "student_output": round(student_output_cost, 4),
+            "teacher_input": round(teacher_input_cost, 4),
+            "teacher_output": round(teacher_output_cost, 4)
+        }
+    }
+
+
 # function to take a program from the program folder and run it on a row from the dataset
 def generate_program_response(
     human_readable_id: str,
