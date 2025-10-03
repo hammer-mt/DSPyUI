@@ -977,7 +977,7 @@ with gr.Blocks(css=custom_css) as demo:
             # Add filter and sort functionality in one line
             with gr.Row():
                 filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
-                sort_by = gr.Radio(["Run Date", "Evaluation Score"], label="Sort by", value="Run Date", scale=1)
+                sort_by = gr.Radio(["Run Date", "Evaluation Score", "Cost"], label="Sort by", value="Run Date", scale=1)
                 sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
 
             @gr.render(inputs=[filter_signature, sort_by, sort_order])
@@ -986,9 +986,11 @@ with gr.Blocks(css=custom_css) as demo:
                     filtered_prompts = list_prompts(signature_filter=filter_signature)
                 else:
                     filtered_prompts = prompts
-                
+
                 if sort_by == "Evaluation Score":
                     key_func = lambda x: float(x["Eval Score"])
+                elif sort_by == "Cost":
+                    key_func = lambda x: float(x.get("Cost", 0))
                 else:  # Run Date
                     key_func = lambda x: x["ID"]  # Use the entire ID for sorting
                 
@@ -1007,6 +1009,9 @@ with gr.Blocks(css=custom_css) as demo:
                                             gr.Markdown(f"**ID:** {prompt['ID']}")
                                             gr.Markdown(f"**Signature:** {prompt['Signature']}")
                                             gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
+                                            cost_val = prompt.get('Cost', 0)
+                                            tokens_val = prompt.get('Tokens', 0)
+                                            gr.Markdown(f"**💰 Cost:** ${cost_val:.4f} | **🎫 Tokens:** {tokens_val:,}")
                                         view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
                                     
                                     prompt_components.append((prompt, view_details_btn))

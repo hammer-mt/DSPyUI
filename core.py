@@ -534,9 +534,12 @@ def list_prompts(
                 input_signature = f"{', '.join(data['input_fields'])}"
                 
                 eval_score = data.get('evaluation_score', 'N/A')
+                actual_cost = data.get('actual_cost', 0)
+                total_tokens = data.get('total_tokens', 0)
+
                 # Exclude example data
                 details = {k: v for k, v in data.items() if k != 'example_data'}
-                
+
                 # Check if signature_filter is provided and matches
                 if signature_filter and signature_filter.lower() not in signature.lower():
                     print(f"Skipping file {file} due to signature mismatch")
@@ -546,11 +549,13 @@ def list_prompts(
                 if output_filter:
                     if not all(filter_item.lower() in input_signature.lower() for filter_item in output_filter):
                         continue
-                
+
                 prompt_details.append({
                     "ID": prompt_id,
                     "Signature": signature,
                     "Eval Score": eval_score,
+                    "Cost": actual_cost,
+                    "Tokens": total_tokens,
                     "Details": json.dumps(details, indent=4)  # Add full details as a JSON string
                 })
     
