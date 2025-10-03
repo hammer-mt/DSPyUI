@@ -55,8 +55,8 @@ class TestCompileTab:
 
     def test_llm_configuration_exists(self, page):
         """Test that LLM configuration dropdowns exist."""
-        # Should have Model Provider dropdown
-        assert page.locator("label", has_text="Model Provider").is_visible()
+        # Should have Model dropdown
+        assert page.locator("label", has_text="Model").is_visible()
 
     def test_optimizer_dropdown_exists(self, page):
         """Test that Optimizer dropdown exists."""
@@ -64,7 +64,7 @@ class TestCompileTab:
 
     def test_evaluation_metric_exists(self, page):
         """Test that Evaluation Metric dropdown exists."""
-        assert page.locator("label", has_text="Evaluation Metric").is_visible()
+        assert page.locator("label", has_text="Metric").is_visible()
 
 
 class TestViewPromptsTab:
