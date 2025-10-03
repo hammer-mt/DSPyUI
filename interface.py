@@ -367,6 +367,20 @@ with gr.Blocks(css=custom_css) as demo:
                         json_filename = f"prompts/{human_readable_id}.json"
                         with open(json_filename, 'w') as f:
                             json.dump(details, f, indent=4)
+
+                        # Also save as consolidated .dspyui file
+                        from core import save_consolidated_program
+                        try:
+                            consolidated_path = save_consolidated_program(
+                                human_readable_id,
+                                details,
+                                f"programs/{human_readable_id}.json",
+                                data[example_data]
+                            )
+                            print(f"Consolidated file saved to {consolidated_path}")
+                        except Exception as e:
+                            print(f"Warning: Failed to save consolidated file: {e}")
+
                         return signature, evaluation_score, optimized_prompt, gr.update(choices=row_choice_options, visible=True, value="Row 1"), gr.update(visible=True), row_choice_options, gr.update(visible=True), gr.update(visible=True), human_readable_id, gr.update(visible=True), baseline_score
                     
                 gr.Markdown("### Data")
