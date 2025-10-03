@@ -167,29 +167,36 @@ class GradioTestRunner:
         Returns:
             Dictionary containing test statistics
         """
-        results = {
-            "passed": 0,
-            "failed": 0,
-            "skipped": 0,
-            "errors": 0,
-            "total": 0,
-            "failed_tests": []
-        }
+        # Use explicit type annotations for dictionary values
+        passed: int = 0
+        failed: int = 0
+        skipped: int = 0
+        errors: int = 0
+        failed_tests: List[str] = []
 
         # Parse pytest output
         lines = pytest_output.split('\n')
         for line in lines:
             if " PASSED" in line:
-                results["passed"] += 1
+                passed += 1
             elif " FAILED" in line:
-                results["failed"] += 1
-                results["failed_tests"].append(line.strip())
+                failed += 1
+                failed_tests.append(line.strip())
             elif " SKIPPED" in line:
-                results["skipped"] += 1
+                skipped += 1
             elif " ERROR" in line:
-                results["errors"] += 1
+                errors += 1
 
-        results["total"] = results["passed"] + results["failed"] + results["skipped"] + results["errors"]
+        total = passed + failed + skipped + errors
+
+        results = {
+            "passed": passed,
+            "failed": failed,
+            "skipped": skipped,
+            "errors": errors,
+            "total": total,
+            "failed_tests": failed_tests
+        }
 
         return results
 
