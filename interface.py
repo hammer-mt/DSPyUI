@@ -523,9 +523,26 @@ with gr.Blocks(css=custom_css) as demo:
                     return gr.update(visible=True)
 
             def process_csv(file, *args):
+                """
+                Process uploaded CSV file and validate headers against expected field names.
+                Returns: (example_data_value, example_data_update, compile_button_update,
+                         error_message_update, enter_manually_btn_update, upload_csv_btn_update)
+                """
+                # Default error return with all 6 values
+                default_error = (None, gr.update(visible=False), gr.update(visible=False),
+                               gr.update(visible=False), gr.update(interactive=False),
+                               gr.update(interactive=False))
+
                 if file is not None:
                     try:
+                        # Validate file object has required attributes
+                        if not hasattr(file, 'name'):
+                            return (None, gr.update(visible=False), gr.update(visible=False),
+                                  gr.update(visible=True, value="Error: Invalid file object"),
+                                  gr.update(interactive=False), gr.update(interactive=False))
+
                         df = pd.read_csv(file.name)
+
                         # Correctly assign input and output fields based on the actual arguments
                         input_fields = []
                         output_fields = []
@@ -537,13 +554,22 @@ with gr.Blocks(css=custom_css) as demo:
                                 elif len(output_fields) < len(output_values):
                                     output_fields.append(arg)
                         expected_headers = input_fields + output_fields
-                        
+
                         if list(df.columns) != expected_headers:
-                            return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}")
-                        return df, gr.update(visible=True), gr.update(visible=True), gr.update(visible=False)
+                            return (None, gr.update(visible=False), gr.update(visible=False),
+                                  gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}"),
+                                  gr.update(interactive=False), gr.update(interactive=False))
+
+                        # Success: show dataframe and enable compile button
+                        return (df, gr.update(visible=True), gr.update(visible=True),
+                               gr.update(visible=False), gr.update(interactive=False),
+                               gr.update(interactive=False))
                     except Exception as e:
-                        return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True, value=f"Error: {str(e)}")
-                return None, gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(interactive=False), gr.update(interactive=False)
+                        return (None, gr.update(visible=False), gr.update(visible=False),
+                               gr.update(visible=True, value=f"Error: {str(e)}"),
+                               gr.update(interactive=False), gr.update(interactive=False))
+
+                return default_error
 
             # Function to show/hide the hint textbox based on the selected module
             def update_hint_visibility(module):
