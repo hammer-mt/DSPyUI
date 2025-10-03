@@ -28,6 +28,38 @@ SUPPORTED_GOOGLE_MODELS = [
     "gemini-1.5-pro"
 ]
 
+# Model pricing in USD per 1M tokens (input, output)
+# Prices as of January 2025
+MODEL_PRICING: Dict[str, Dict[str, float]] = {
+    # OpenAI models
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+    "gpt-4": {"input": 30.00, "output": 60.00},
+    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+
+    # Anthropic models
+    "claude-3-5-sonnet-20240620": {"input": 3.00, "output": 15.00},
+    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
+    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
+    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+
+    # Groq models
+    "mixtral-8x7b-32768": {"input": 0.27, "output": 0.27},
+    "llama3-70b-8192": {"input": 0.59, "output": 0.79},
+    "llama3-8b-8192": {"input": 0.05, "output": 0.08},
+    "gemma-7b-it": {"input": 0.07, "output": 0.07},
+    "gemma2-9b-it": {"input": 0.20, "output": 0.20},
+
+    # Google models
+    "gemini-1.5-flash-8b": {"input": 0.04, "output": 0.15},
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+
+    # Local models have zero cost
+    "local": {"input": 0.0, "output": 0.0}
+}
+
 # when using MIPRO or BootstrapFewShotWithRandomSearch, we need to configure the LM globally or it gives us a 'No LM loaded' error
 lm = dspy.LM('openai/gpt-4o-mini')
 dspy.configure(lm=lm)
