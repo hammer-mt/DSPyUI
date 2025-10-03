@@ -58,6 +58,14 @@ else
         google-generativeai
 fi
 
+# Install vendored DSPy in editable mode
+echo "Installing vendored DSPy..."
+if [ -d "dspy" ]; then
+    pip install -e ./dspy
+else
+    echo "Warning: vendored dspy directory not found. The application may not work correctly."
+fi
+
 # Check if the Python script exists
 if [ ! -f interface.py ]; then
     echo "interface.py not found. Please make sure the file exists in the current directory."
