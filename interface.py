@@ -315,9 +315,9 @@ with gr.Blocks(css=custom_css) as demo:
                         # Save details to JSON
                         details = {
                             "input_fields": input_fields,
-                            "input_descriptions": input_descs,
+                            "input_descs": input_descs,
                             "output_fields": output_fields,
-                            "output_descriptions": output_descs,
+                            "output_descs": output_descs,
                             "dspy_module": data[dspy_module],
                             "llm_model": data[llm_model],
                             "teacher_model": data[teacher_model],
@@ -328,7 +328,9 @@ with gr.Blocks(css=custom_css) as demo:
                             "baseline_score": baseline_score,
                             "optimized_prompt": optimized_prompt,
                             "usage_instructions": usage_instructions,
-                            "human_readable_id": human_readable_id
+                            "human_readable_id": human_readable_id,
+                            "metric_type": data[metric_type],
+                            "judge_prompt_id": judge_prompt_id
                         }
 
                         row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
