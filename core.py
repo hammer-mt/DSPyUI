@@ -571,6 +571,126 @@ def export_to_csv(data: List[Dict[str, Any]]) -> str:
     return filename
 
 
+def get_model_pricing(model: str) -> Dict[str, float]:
+    """
+    Get pricing information for a model.
+
+    Args:
+        model: Model name (e.g., 'gpt-4o-mini', 'claude-3-5-sonnet-20240620')
+
+    Returns:
+        Dictionary with 'input' and 'output' prices per 1M tokens in USD
+    """
+    # Handle local models
+    if model.startswith("local:"):
+        return MODEL_PRICING["local"]
+
+    # Return pricing for known models
+    if model in MODEL_PRICING:
+        return MODEL_PRICING[model]
+
+    # Default to gpt-4o-mini pricing if model unknown (conservative estimate)
+    print(f"Warning: Unknown model '{model}', using gpt-4o-mini pricing as estimate")
+    return MODEL_PRICING["gpt-4o-mini"]
+
+
+def estimate_compilation_cost(
+    dataset_size: int,
+    optimizer: str,
+    student_model: str,
+    teacher_model: str,
+    input_fields: List[str],
+    output_fields: List[str],
+    instructions: str
+) -> Dict[str, Any]:
+    """
+    Estimate the cost of compiling a DSPy program.
+
+    Args:
+        dataset_size: Number of examples in the training dataset
+        optimizer: Type of optimizer (e.g., 'BootstrapFewShot', 'MIPROv2')
+        student_model: Model used for the student program
+        teacher_model: Model used for teaching/optimization
+        input_fields: List of input field names
+        output_fields: List of output field names
+        instructions: Task instructions
+
+    Returns:
+        Dictionary containing cost estimate details
+    """
+    # Get pricing for both models
+    student_pricing = get_model_pricing(student_model)
+    teacher_pricing = get_model_pricing(teacher_model)
+
+    # Estimate average token counts
+    # Input: field names + instructions + example data (conservative estimate)
+    avg_input_tokens = 100 + len(instructions.split()) * 1.3 + len(input_fields) * 20
+    # Output: conservative estimate for generated response
+    avg_output_tokens = 300
+
+    # Estimate number of API calls based on optimizer type
+    if optimizer == "LabeledFewShot":
+        # No optimization calls, just inference
+        teacher_calls = 0
+        student_calls = 0
+    elif optimizer == "BootstrapFewShot":
+        # Teacher generates examples, student uses them
+        teacher_calls = min(dataset_size * 3, 100)  # Cap at 100 calls
+        student_calls = dataset_size  # One call per example for evaluation
+    elif optimizer == "BootstrapFewShotWithRandomSearch":
+        # More expensive due to random search
+        teacher_calls = min(dataset_size * 10, 300)
+        student_calls = dataset_size * 2
+    elif optimizer == "MIPROv2":
+        # Dataset-level optimization, not per-example
+        teacher_calls = min(dataset_size + 100, 200)  # Bootstrap + optimization
+        student_calls = dataset_size * 3  # Multiple evaluation rounds
+    elif optimizer == "COPRO":
+        # Similar to MIPRO but focused on prompts
+        teacher_calls = min(dataset_size + 50, 150)
+        student_calls = dataset_size * 2
+    elif optimizer == "BootstrapFinetune":
+        # Similar to BootstrapFewShot + finetuning overhead
+        teacher_calls = min(dataset_size * 3, 100)
+        student_calls = dataset_size
+        # Note: Finetuning costs are separate and not included here
+    else:
+        # Default conservative estimate
+        teacher_calls = dataset_size * 5
+        student_calls = dataset_size
+
+    # Calculate costs (convert from per-1M to actual cost)
+    teacher_input_cost = (teacher_calls * avg_input_tokens * teacher_pricing["input"]) / 1_000_000
+    teacher_output_cost = (teacher_calls * avg_output_tokens * teacher_pricing["output"]) / 1_000_000
+    student_input_cost = (student_calls * avg_input_tokens * student_pricing["input"]) / 1_000_000
+    student_output_cost = (student_calls * avg_output_tokens * student_pricing["output"]) / 1_000_000
+
+    total_cost = teacher_input_cost + teacher_output_cost + student_input_cost + student_output_cost
+
+    # Add 20% buffer for safety
+    total_cost_with_buffer = total_cost * 1.2
+
+    return {
+        "estimated_cost_usd": round(total_cost_with_buffer, 4),
+        "teacher_calls": teacher_calls,
+        "student_calls": student_calls,
+        "estimated_input_tokens": int((teacher_calls + student_calls) * avg_input_tokens),
+        "estimated_output_tokens": int((teacher_calls + student_calls) * avg_output_tokens),
+        "student_model": student_model,
+        "teacher_model": teacher_model,
+        "optimizer": optimizer,
+        "dataset_size": dataset_size,
+        "is_expensive": total_cost_with_buffer > 1.0,
+        "is_very_expensive": total_cost_with_buffer > 5.0,
+        "breakdown": {
+            "teacher_input": round(teacher_input_cost, 4),
+            "teacher_output": round(teacher_output_cost, 4),
+            "student_input": round(student_input_cost, 4),
+            "student_output": round(student_output_cost, 4)
+        }
+    }
+
+
 # function to take a program from the program folder and run it on a row from the dataset
 def generate_program_response(
     human_readable_id: str,
