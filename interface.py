@@ -886,11 +886,47 @@ with gr.Blocks(css=custom_css) as demo:
                             with gr.Row():
                                 gr.Markdown(f"## {details['human_readable_id']}")
                                 load_into_compiler_btn = gr.Button("📋 Load into Compiler", size="sm", variant="primary")
+                                export_dspyui_btn = gr.Button("💾 Export .dspyui", size="sm", variant="secondary")
+
+                            # Export status and download file
+                            export_status = gr.Markdown(visible=False)
+                            dspyui_download = gr.File(label="Download .dspyui file", visible=False)
 
                             # Wire up the load button to update load_prompt_data State
                             load_into_compiler_btn.click(
                                 lambda: selected_prompt,
                                 outputs=[load_prompt_data]
+                            )
+
+                            # Wire up export button
+                            def export_prompt_to_dspyui(selected_prompt):
+                                from core import export_to_consolidated
+                                import os
+
+                                if selected_prompt is None:
+                                    return gr.update(visible=True, value="❌ No prompt selected"), gr.update(visible=False)
+
+                                details = json.loads(selected_prompt["Details"])
+                                human_readable_id = details['human_readable_id']
+
+                                # Try to export
+                                output_path = export_to_consolidated(human_readable_id)
+
+                                if output_path and os.path.exists(output_path):
+                                    return (
+                                        gr.update(visible=True, value=f"✅ Exported successfully to `{output_path}`"),
+                                        gr.update(visible=True, value=output_path)
+                                    )
+                                else:
+                                    return (
+                                        gr.update(visible=True, value="❌ Export failed. Make sure all program files exist."),
+                                        gr.update(visible=False)
+                                    )
+
+                            export_dspyui_btn.click(
+                                export_prompt_to_dspyui,
+                                inputs=[selected_prompt],
+                                outputs=[export_status, dspyui_download]
                             )
 
                             with gr.Group():
