@@ -74,27 +74,27 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
-def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None) -> dspy.Module:
+def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None, max_iters: int = 3) -> dspy.Module:
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
             def __init__(self):
                 super().__init__()
                 self.predictor = dspy.Predict(CustomSignature)
-            
+
             def forward(self, **kwargs):
                 result = self.predictor(**kwargs)
                 return result
-        
+
         return CustomPredictModule()
     elif dspy_module == "ChainOfThought":
         class CustomChainOfThoughtModule(dspy.Module):
             def __init__(self):
                 super().__init__()
                 self.cot = dspy.ChainOfThought(CustomSignature)
-            
+
             def forward(self, **kwargs):
                 return self.cot(**kwargs)
-        
+
         return CustomChainOfThoughtModule()
     elif dspy_module == "ChainOfThoughtWithHint":
         class CustomChainOfThoughtWithHintModule(dspy.Module):
@@ -102,17 +102,27 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
                 super().__init__()
                 self.cot_with_hint = dspy.ChainOfThought(CustomSignature)
                 self.hint = hint
-            
+
             def forward(self, **kwargs):
                 # Inject the hint into the kwargs
                 kwargs['hint'] = self.hint
                 return self.cot_with_hint(**kwargs)
-        
+
         return CustomChainOfThoughtWithHintModule()
+    elif dspy_module == "ProgramOfThought":
+        class CustomProgramOfThoughtModule(dspy.Module):
+            def __init__(self):
+                super().__init__()
+                self.pot = dspy.ProgramOfThought(CustomSignature, max_iters=max_iters)
+
+            def forward(self, **kwargs):
+                return self.pot(**kwargs)
+
+        return CustomProgramOfThoughtModule()
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, llm_base_url: str = None, teacher_base_url: str = None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, max_iters: int = 3, llm_base_url: str = None, teacher_base_url: str = None) -> str:
     # Set up the LLM model
     if llm_model.startswith("local:"):
         # Local LLM with custom endpoint
@@ -157,7 +167,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs or [], output_descs or [])
 
     # Create the DSPy module using the new function
-    module = create_dspy_module(dspy_module, CustomSignature, hint)
+    module = create_dspy_module(dspy_module, CustomSignature, hint, max_iters)
 
     # Convert DataFrame to list of dictionaries
     example_data_list = example_data.to_dict('records')
@@ -533,10 +543,14 @@ def generate_program_response(human_readable_id, row_data, evaluate=False):
     print("output_descs:", output_descs)
     print("dspy_module:", dspy_module)
 
+    # Get optional parameters
+    hint = program_details.get('hint')
+    max_iters = program_details.get('max_iters', 3)
+
     # Create the custom signature
     CustomSignature = create_custom_signature(input_fields, output_fields, instructions, input_descs, output_descs)
     print("CustomSignature:", CustomSignature)
-    compiled_program = create_dspy_module(dspy_module, CustomSignature)
+    compiled_program = create_dspy_module(dspy_module, CustomSignature, hint, max_iters)
     print("compiled_program:", compiled_program)
     compiled_program.load(program_path)
     print("compiled_program after load:", compiled_program)
