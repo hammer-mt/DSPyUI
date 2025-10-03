@@ -9,7 +9,7 @@ from openai import OpenAI
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot
 from pydantic import create_model
 
 # List of supported Groq models
@@ -122,7 +122,7 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, max_iters: int = 3, llm_base_url: str = None, teacher_base_url: str = None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, max_iters: int = 3, k: int = 16, llm_base_url: str = None, teacher_base_url: str = None) -> str:
     # Set up the LLM model
     if llm_model.startswith("local:"):
         # Local LLM with custom endpoint
@@ -375,6 +375,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
             eval_kwargs=kwargs,
             requires_permission_to_run=False
         )
+    elif optimizer == "LabeledFewShot":
+        teleprompter = LabeledFewShot(k=k)
+        compiled_program = teleprompter.compile(module, trainset=trainset)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
