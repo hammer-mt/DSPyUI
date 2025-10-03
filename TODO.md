@@ -20,5 +20,5 @@ None currently! Previous bugs were fixed:
 - multimodal support with Image
 - ✅ local running of LLM with ollama, llama.cpp or lm studio (COMPLETED - OpenAI-compatible endpoints)
 - ✅ ability to load an existing prompt back into the interface to re-run (COMPLETED)
-- consolidate the output of the program to a single file
+- ✅ consolidate the output of the program to a single file (COMPLETED - .dspyui format with import/export)
 - ✅ run the evaluation of the program in the generate interface too (COMPLETED - displays score with same metrics as compilation)
