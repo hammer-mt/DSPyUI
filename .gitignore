@@ -175,3 +175,4 @@ prompt.md
 dspy/
 CLAUDE.md
 dspy-docs.md
+.agent/
