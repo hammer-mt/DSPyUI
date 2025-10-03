@@ -177,3 +177,4 @@ CLAUDE.md
 dspy-docs.md
 .agent/
 test_env/
+test_logs/
