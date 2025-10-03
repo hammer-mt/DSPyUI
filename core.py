@@ -185,7 +185,7 @@ def compile_program(
     k: int = 16,
     llm_base_url: Optional[str] = None,
     teacher_base_url: Optional[str] = None
-) -> Tuple[str, str]:
+) -> Tuple[str, str, Dict[str, Any]]:
     # Set up the LLM model
     if llm_model.startswith("local:"):
         # Local LLM with custom endpoint
@@ -451,6 +451,11 @@ def compile_program(
     print("Evaluation Score:")
     print(score)
 
+    # Calculate actual cost from DSPy history
+    actual_cost_data = calculate_actual_cost(llm_model, teacher_model)
+    print(f"Actual cost: ${actual_cost_data['actual_cost_usd']:.4f}")
+    print(f"Total tokens: {actual_cost_data['total_tokens']:,} ({actual_cost_data['input_tokens']:,} input, {actual_cost_data['output_tokens']:,} output)")
+
     # Generate a human-readable ID for the compiled program
     human_readable_id = generate_human_readable_id(input_fields, output_fields, dspy_module, llm_model, teacher_model, optimizer, instructions)
 
@@ -501,7 +506,7 @@ print({', '.join(f'result.{field}' for field in output_fields)})
         example_output += f"Output: {result}\n"
         usage_instructions += example_output
 
-    return usage_instructions, final_prompt
+    return usage_instructions, final_prompt, actual_cost_data
 
 # Function to list prompts
 def list_prompts(
