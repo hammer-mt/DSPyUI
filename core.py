@@ -7,10 +7,11 @@ import json
 import numpy as np
 from openai import OpenAI
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple, Callable, Type, Union
 from dspy.evaluate import Evaluate
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot
 from pydantic import create_model
+import numpy.typing as npt
 
 # List of supported Groq models
 SUPPORTED_GROQ_MODELS = [
@@ -31,7 +32,13 @@ SUPPORTED_GOOGLE_MODELS = [
 lm = dspy.LM('openai/gpt-4o-mini')
 dspy.configure(lm=lm)
 
-def create_custom_signature(input_fields: List[str], output_fields: List[str], instructions: str, input_descs: List[str], output_descs: List[str]):
+def create_custom_signature(
+    input_fields: List[str],
+    output_fields: List[str],
+    instructions: str,
+    input_descs: List[str],
+    output_descs: List[str]
+) -> Type[dspy.Signature]:
     fields = {}
     for i, field in enumerate(input_fields):
         if i < len(input_descs) and input_descs[i]:
@@ -74,7 +81,12 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
     
     return unique_id
 
-def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None, max_iters: int = 3) -> dspy.Module:
+def create_dspy_module(
+    dspy_module: str,
+    CustomSignature: Type[dspy.Signature],
+    hint: Optional[str] = None,
+    max_iters: int = 3
+) -> dspy.Module:
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
             def __init__(self):
@@ -122,7 +134,25 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, max_iters: int = 3, k: int = 16, llm_base_url: str = None, teacher_base_url: str = None) -> str:
+def compile_program(
+    input_fields: List[str],
+    output_fields: List[str],
+    dspy_module: str,
+    llm_model: str,
+    teacher_model: str,
+    example_data: pd.DataFrame,
+    optimizer: str,
+    instructions: str,
+    metric_type: str,
+    judge_prompt_id: Optional[str] = None,
+    input_descs: Optional[List[str]] = None,
+    output_descs: Optional[List[str]] = None,
+    hint: Optional[str] = None,
+    max_iters: int = 3,
+    k: int = 16,
+    llm_base_url: Optional[str] = None,
+    teacher_base_url: Optional[str] = None
+) -> Tuple[str, str]:
     # Set up the LLM model
     if llm_model.startswith("local:"):
         # Local LLM with custom endpoint
@@ -441,7 +471,10 @@ print({', '.join(f'result.{field}' for field in output_fields)})
     return usage_instructions, final_prompt
 
 # Function to list prompts
-def list_prompts(signature_filter=None, output_filter=None):
+def list_prompts(
+    signature_filter: Optional[str] = None,
+    output_filter: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
     
     if not os.path.exists('prompts'):
         print("Prompts directory does not exist")
@@ -486,7 +519,8 @@ def list_prompts(signature_filter=None, output_filter=None):
     print(f"Found {len(prompt_details)} saved prompts")
     return prompt_details  # Return the list of prompts as dictionaries
 
-def load_example_csv(example_name):
+def load_example_csv(example_name: str) -> Optional[pd.DataFrame]:
+    """Load an example CSV file from the example_data directory."""
     csv_path = f"example_data/{example_name}.csv"
     try:
         df = pd.read_csv(csv_path)
@@ -496,7 +530,8 @@ def load_example_csv(example_name):
         return None
 
 
-def export_to_csv(data):
+def export_to_csv(data: List[Dict[str, Any]]) -> str:
+    """Export data to a CSV file."""
     df = pd.DataFrame(data)
     filename = "exported_data.csv"
     df.to_csv(filename, index=False)
@@ -504,7 +539,11 @@ def export_to_csv(data):
 
 
 # function to take a program from the program folder and run it on a row from the dataset
-def generate_program_response(human_readable_id, row_data, evaluate=False):
+def generate_program_response(
+    human_readable_id: str,
+    row_data: Dict[str, Any],
+    evaluate: bool = False
+) -> Union[str, Tuple[str, Optional[float], Optional[str]]]:
     """
     Generate a response from a compiled program for a given row of data.
 
@@ -613,7 +652,11 @@ def generate_program_response(human_readable_id, row_data, evaluate=False):
     return output
 
 
-def create_evaluation_metric(metric_type: str, output_fields: List[str], judge_prompt_id: str = None):
+def create_evaluation_metric(
+    metric_type: str,
+    output_fields: List[str],
+    judge_prompt_id: Optional[str] = None
+) -> Callable[[Dict[str, Any], Any, Optional[Any]], float]:
     """
     Create an evaluation metric function based on the specified type.
 
@@ -728,9 +771,13 @@ def create_evaluation_metric(metric_type: str, output_fields: List[str], judge_p
     return metric
 
 
-def evaluate_single_prediction(gold_data: Dict[str, Any], prediction: Any,
-                               metric_type: str, output_fields: List[str],
-                               judge_prompt_id: str = None) -> float:
+def evaluate_single_prediction(
+    gold_data: Dict[str, Any],
+    prediction: Any,
+    metric_type: str,
+    output_fields: List[str],
+    judge_prompt_id: Optional[str] = None
+) -> float:
     """
     Evaluate a single prediction against gold data using the specified metric.
 
