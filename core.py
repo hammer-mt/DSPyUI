@@ -481,26 +481,40 @@ def export_to_csv(data):
 
 
 # function to take a program from the program folder and run it on a row from the dataset
-def generate_program_response(human_readable_id, row_data):
+def generate_program_response(human_readable_id, row_data, evaluate=False):
+    """
+    Generate a response from a compiled program for a given row of data.
+
+    Args:
+        human_readable_id: The ID of the compiled program
+        row_data: Dictionary containing input and optionally output (gold) data
+        evaluate: If True, evaluate the prediction against gold data (if available)
+
+    Returns:
+        If evaluate=False: output string with prediction
+        If evaluate=True: tuple of (output_string, evaluation_score, metric_type)
+    """
     # Load the program details
     program_path = f"programs/{human_readable_id}.json"
     prompt_path = f"prompts/{human_readable_id}.json"
 
     print("program_path:", program_path)
-    
+
     if not os.path.exists(program_path):
         raise ValueError(f"Compiled program not found: {program_path}")
 
     with open(prompt_path, 'r') as f:
         program_details = json.load(f)
-    
+
     # Extract necessary information from program details
     input_fields = program_details.get('input_fields', [])
-    input_descs = program_details.get('input_descs', [])    
+    input_descs = program_details.get('input_descs', [])
     output_fields = program_details.get('output_fields', [])
     output_descs = program_details.get('output_descs', [])
     dspy_module = program_details.get('dspy_module', 'Predict')
     instructions = program_details.get('instructions', '')
+    metric_type = program_details.get('metric_type', 'Exact Match')
+    judge_prompt_id = program_details.get('judge_prompt_id')
 
     print("input_fields:", input_fields)
     print("output_fields:", output_fields)
@@ -525,7 +539,7 @@ def generate_program_response(human_readable_id, row_data):
         else:
             print(f"Warning: Required input field '{field}' not found in row_data")
             program_input[field] = ""  # or some default value
-    
+
     # Run the program
 
     try:
@@ -533,7 +547,10 @@ def generate_program_response(human_readable_id, row_data):
         print("result:", result)
     except Exception as e:
         print(f"Error executing program: {str(e)}")
-        return f"Error: {str(e)}"
+        error_msg = f"Error: {str(e)}"
+        if evaluate:
+            return error_msg, None, None
+        return error_msg
 
     # Prepare the output
     output = "Input:\n"
@@ -548,4 +565,158 @@ def generate_program_response(human_readable_id, row_data):
 
     print("output:", output)
 
+    # Optionally evaluate the prediction
+    if evaluate:
+        # Check if we have gold data for all output fields
+        has_gold_data = all(field in row_data for field in output_fields)
+
+        if has_gold_data:
+            try:
+                score = evaluate_single_prediction(
+                    row_data, result, metric_type, output_fields, judge_prompt_id
+                )
+                return output, score, metric_type
+            except Exception as e:
+                print(f"Error during evaluation: {e}")
+                return output, None, metric_type
+        else:
+            # No gold data available
+            return output, None, metric_type
+
     return output
+
+
+def create_evaluation_metric(metric_type: str, output_fields: List[str], judge_prompt_id: str = None):
+    """
+    Create an evaluation metric function based on the specified type.
+
+    Args:
+        metric_type: Type of metric ("Exact Match", "Cosine Similarity", or "LLM-as-a-Judge")
+        output_fields: List of output field names to evaluate
+        judge_prompt_id: ID of judge prompt (required for LLM-as-a-Judge)
+
+    Returns:
+        A metric function that takes (gold, pred, trace=None) and returns a score
+    """
+    if metric_type == "Exact Match":
+        def metric(gold, pred, trace=None):
+            if not pred or (isinstance(pred, dspy.Prediction) and not pred.__dict__):
+                return 0
+            try:
+                return int(all(gold[field] == getattr(pred, field) for field in output_fields))
+            except AttributeError:
+                return 0
+
+    elif metric_type == "Cosine Similarity":
+        client = OpenAI()
+
+        def get_embedding(text):
+            response = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            return response.data[0].embedding
+
+        def cosine_similarity(a, b):
+            return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+        def metric(gold, pred, trace=None):
+            try:
+                gold_vector = np.concatenate([get_embedding(str(gold[field])) for field in output_fields])
+                pred_vector = np.concatenate([get_embedding(str(getattr(pred, field))) for field in output_fields])
+                return cosine_similarity(gold_vector, pred_vector)
+            except Exception as e:
+                print(f"Error in cosine similarity metric: {e}")
+                return 0
+
+    elif metric_type == "LLM-as-a-Judge":
+        if judge_prompt_id is None:
+            raise ValueError("Judge prompt ID is required for LLM-as-a-Judge metric")
+
+        example2_id = "JokeTopic:Funny-Gpt4oMini_ChainOfThought_Bootstrapfewshotwithrandomsearch-20241003.json"
+
+        # Load the judge prompt details
+        if judge_prompt_id == example2_id:
+            judge_prompt_path = f"example_data/{judge_prompt_id}"
+        else:
+            judge_prompt_path = f"prompts/{judge_prompt_id}.json"
+
+        if not os.path.exists(judge_prompt_path):
+            raise ValueError(f"Judge prompt not found: {judge_prompt_path}")
+
+        with open(judge_prompt_path, 'r') as f:
+            judge_prompt_details = json.load(f)
+
+        judge_input_fields = judge_prompt_details.get('input_fields', [])
+        judge_input_descs = judge_prompt_details.get('input_descs', [])
+        judge_output_fields = judge_prompt_details.get('output_fields', [])
+        judge_output_descs = judge_prompt_details.get('output_descs', [])
+        judge_module = judge_prompt_details.get('dspy_module', 'Predict')
+        judge_instructions = judge_prompt_details.get('instructions', '')
+        judge_human_readable_id = judge_prompt_details.get('human_readable_id')
+
+        # Create the custom signature for the judge program
+        JudgeSignature = create_custom_signature(judge_input_fields, judge_output_fields,
+                                                 judge_instructions, judge_input_descs, judge_output_descs)
+
+        # Create the judge program
+        judge_program = create_dspy_module(judge_module, JudgeSignature)
+
+        # Load the compiled judge program
+        if judge_prompt_id == example2_id:
+            judge_program_path = f"example_data/{judge_human_readable_id}-program.json"
+        else:
+            judge_program_path = f"programs/{judge_human_readable_id}.json"
+
+        if not os.path.exists(judge_program_path):
+            raise ValueError(f"Compiled judge program not found: {judge_program_path}")
+
+        judge_program.load(judge_program_path)
+
+        def metric(gold, pred, trace=None):
+            try:
+                # Prepare input for the judge program
+                judge_input = {}
+                for field in judge_input_fields:
+                    if field in gold:
+                        judge_input[field] = gold[field]
+                    elif hasattr(pred, field):
+                        judge_input[field] = getattr(pred, field)
+                    else:
+                        judge_input[field] = ""
+
+                # Run the judge program
+                judge_result = judge_program(**judge_input)
+
+                # Extract the score from the judge output
+                score_field = judge_output_fields[0]
+                score = float(getattr(judge_result, score_field))
+                return score
+            except Exception as e:
+                print(f"Error in LLM-as-a-Judge metric: {e}")
+                return 0
+    else:
+        raise ValueError(f"Unknown metric type: {metric_type}")
+
+    return metric
+
+
+def evaluate_single_prediction(gold_data: Dict[str, Any], prediction: Any,
+                               metric_type: str, output_fields: List[str],
+                               judge_prompt_id: str = None) -> float:
+    """
+    Evaluate a single prediction against gold data using the specified metric.
+
+    Args:
+        gold_data: Dictionary containing the expected outputs
+        prediction: The prediction object (dspy.Prediction or dict)
+        metric_type: Type of metric to use
+        output_fields: List of output field names
+        judge_prompt_id: ID of judge prompt (for LLM-as-a-Judge)
+
+    Returns:
+        Numeric evaluation score
+    """
+    metric = create_evaluation_metric(metric_type, output_fields, judge_prompt_id)
+    score = metric(gold_data, prediction)
+    return float(score)
