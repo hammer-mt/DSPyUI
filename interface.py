@@ -526,10 +526,10 @@ with gr.Blocks(css=custom_css) as demo:
             with gr.Row():
                 with gr.Column():
                     dspy_module = gr.Dropdown(
-                        ["Predict", "ChainOfThought", "ChainOfThoughtWithHint"],
+                        ["Predict", "ChainOfThought", "ChainOfThoughtWithHint", "ProgramOfThought"],
                         label="Module",
                         value="Predict",
-                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, and ChainOfThoughtWithHint for guided reasoning.",
+                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, ChainOfThoughtWithHint for guided reasoning, and ProgramOfThought for tasks requiring code execution (requires deno installed).",
                         interactive=True  # This line was likely already present
                     )
                     hint_textbox = gr.Textbox(
