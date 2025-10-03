@@ -1185,6 +1185,53 @@ def export_to_consolidated(human_readable_id: str) -> Optional[str]:
 
 
 # ========================================
+# LM Configuration Helper
+# ========================================
+
+def configure_lm(
+    model: str,
+    provider: str = "openai",
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None
+) -> None:
+    """
+    Configure DSPy language model.
+
+    Args:
+        model: Model name (e.g., 'gpt-4o-mini', 'claude-3-5-sonnet-20240620')
+        provider: Provider name ('openai', 'anthropic', 'groq', 'google')
+        api_key: Optional API key (uses environment variable if not provided)
+        base_url: Optional base URL for local LLMs
+    """
+    if model.startswith("local:"):
+        # Local LLM with custom endpoint
+        model_name = model[6:]  # Remove "local:" prefix
+        base_url = base_url or "http://127.0.0.1:1234/v1"
+        lm = dspy.LM(f'openai/{model_name}', api_base=base_url)
+    elif provider == "openai" or model.startswith("gpt-"):
+        if base_url:
+            lm = dspy.LM(f'openai/{model}', api_base=base_url)
+        else:
+            lm = dspy.LM(f'openai/{model}')
+    elif provider == "anthropic" or model.startswith("claude-"):
+        lm = dspy.LM(f'anthropic/{model}')
+    elif provider == "groq" or model in SUPPORTED_GROQ_MODELS:
+        api_key = api_key or os.environ.get("GROQ_API_KEY")
+        lm = dspy.LM(f'groq/{model}', api_key=api_key)
+    elif provider == "google" or model in SUPPORTED_GOOGLE_MODELS:
+        api_key = api_key or os.environ.get("GOOGLE_API_KEY")
+        lm = dspy.LM(f'google/{model}', api_key=api_key)
+    else:
+        raise ValueError(f"Unsupported model: {model} with provider: {provider}")
+
+    # Configure DSPy with the LM
+    dspy.configure(lm=lm)
+
+    # Verify that the LM is configured
+    assert dspy.settings.lm is not None, "Failed to configure LM"
+
+
+# ========================================
 # Chain Building Functions
 # ========================================
 
