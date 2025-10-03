@@ -20,8 +20,10 @@ def gradio_server():
     # Use a different port for testing to avoid conflicts
     env["GRADIO_SERVER_PORT"] = "7861"
 
+    # Use sys.executable to get the current Python interpreter (from the virtualenv)
+    import sys
     process = subprocess.Popen(
-        ["python", "interface.py"],
+        [sys.executable, "interface.py"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -39,9 +41,11 @@ def gradio_server():
             pass
         time.sleep(1)
     else:
-        # Kill process if server didn't start
+        # Kill process if server didn't start and get error output
+        stdout, stderr = process.communicate(timeout=2)
         process.kill()
-        raise RuntimeError("Gradio server failed to start")
+        error_msg = f"Gradio server failed to start.\nStdout: {stdout.decode() if stdout else 'None'}\nStderr: {stderr.decode() if stderr else 'None'}"
+        raise RuntimeError(error_msg)
 
     yield "http://localhost:7861"
 
