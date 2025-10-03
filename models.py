@@ -80,7 +80,8 @@ class OptimizerConfig(BaseModel):
         "BootstrapFewShotWithRandomSearch",
         "COPRO",
         "MIPROv2",
-        "LabeledFewShot"
+        "LabeledFewShot",
+        "BootstrapFinetune"
     ] = Field(..., description="Type of optimizer to use")
 
     k: int = Field(default=16, ge=1, le=50, description="Number of examples for LabeledFewShot")
