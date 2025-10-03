@@ -1,4 +1,4 @@
-import dspy
+import dspy  # type: ignore
 import pandas as pd
 import re
 import datetime
@@ -8,8 +8,8 @@ import numpy as np
 from openai import OpenAI
 
 from typing import List, Dict, Any, Optional, Tuple, Callable, Type, Union
-from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot
+from dspy.evaluate import Evaluate  # type: ignore
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot  # type: ignore
 from pydantic import create_model
 import numpy.typing as npt
 
@@ -38,7 +38,7 @@ def create_custom_signature(
     instructions: str,
     input_descs: List[str],
     output_descs: List[str]
-) -> Type[dspy.Signature]:
+) -> Type[dspy.Signature]:  # type: ignore
     fields = {}
     for i, field in enumerate(input_fields):
         if i < len(input_descs) and input_descs[i]:
@@ -83,10 +83,10 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
 
 def create_dspy_module(
     dspy_module: str,
-    CustomSignature: Type[dspy.Signature],
+    CustomSignature: Type[dspy.Signature],  # type: ignore
     hint: Optional[str] = None,
     max_iters: int = 3
-) -> dspy.Module:
+) -> dspy.Module:  # type: ignore
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
             def __init__(self):

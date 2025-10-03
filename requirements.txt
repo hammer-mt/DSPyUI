@@ -22,3 +22,7 @@ dspy-ai>=3.0.0
 
 # Note: A vendored copy exists in ./dspy/ directory (version 3.0.4b1) but has circular import issues
 # The pip-installed version is more stable
+
+# Development Tools
+mypy>=1.18.0  # Type checking
+pydantic>=2.0.0  # Data validation (already included via dspy-ai but pinning explicitly)
