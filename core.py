@@ -1,4 +1,4 @@
-import dspy  # type: ignore
+import dspy
 import pandas as pd
 import re
 import datetime
@@ -8,9 +8,9 @@ import numpy as np
 from openai import OpenAI
 
 from typing import List, Dict, Any, Optional, Tuple, Callable, Type, Union
-from dspy.evaluate import Evaluate  # type: ignore
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot  # type: ignore
-from pydantic import create_model
+from dspy.evaluate import Evaluate
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, LabeledFewShot
+from pydantic import create_model, BaseModel
 import numpy.typing as npt
 
 # List of supported Groq models
@@ -38,23 +38,24 @@ def create_custom_signature(
     instructions: str,
     input_descs: List[str],
     output_descs: List[str]
-) -> Type[dspy.Signature]:  # type: ignore
-    fields = {}
+) -> Any:  # Return Any since we're creating a dynamic type that inherits from dspy.Signature
+    fields: Dict[str, Any] = {}
     for i, field in enumerate(input_fields):
         if i < len(input_descs) and input_descs[i]:
             fields[field] = (str, dspy.InputField(default=..., desc=input_descs[i], json_schema_extra={"__dspy_field_type": "input"}))
         else:
             fields[field] = (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"}))
-    
+
     for i, field in enumerate(output_fields):
         if i < len(output_descs) and output_descs[i]:
             fields[field] = (str, dspy.OutputField(default=..., desc=output_descs[i], json_schema_extra={"__dspy_field_type": "output"}))
         else:
             fields[field] = (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"}))
-    
-    CustomSignatureModel = create_model('CustomSignatureModel', **fields)
-    
-    class CustomSignature(dspy.Signature, CustomSignatureModel):
+
+    # Create a BaseModel subclass dynamically
+    CustomSignatureModel: Type[BaseModel] = create_model('CustomSignatureModel', **fields)  # type: ignore[call-overload]
+
+    class CustomSignature(dspy.Signature, CustomSignatureModel):  # type: ignore[misc,valid-type]
         """
         {instructions}
         """
@@ -83,10 +84,10 @@ def generate_human_readable_id(input_fields: List[str], output_fields: List[str]
 
 def create_dspy_module(
     dspy_module: str,
-    CustomSignature: Type[dspy.Signature],  # type: ignore
+    CustomSignature: Any,  # Dynamic signature type from create_custom_signature
     hint: Optional[str] = None,
     max_iters: int = 3
-) -> dspy.Module:  # type: ignore
+) -> Any:  # Returns a dspy.Module subclass
     if dspy_module == "Predict":
         class CustomPredictModule(dspy.Module):
             def __init__(self):
@@ -792,7 +793,7 @@ def evaluate_single_prediction(
         Numeric evaluation score
     """
     metric = create_evaluation_metric(metric_type, output_fields, judge_prompt_id)
-    score = metric(gold_data, prediction)
+    score = metric(gold_data, prediction, None)  # Pass None for trace parameter
     return float(score)
 
 
