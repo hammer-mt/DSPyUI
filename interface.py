@@ -1164,11 +1164,49 @@ with gr.Blocks(css=custom_css) as demo:
             )
 
         with gr.TabItem("View Prompts"):
-            
+
+            # Import .dspyui file section
+            with gr.Accordion("📥 Import .dspyui File", open=False):
+                gr.Markdown("""
+                Upload a `.dspyui` file to import a previously exported program.
+                This will extract and save the program, dataset, and configuration to your local directories.
+                """)
+
+                with gr.Row():
+                    dspyui_upload = gr.File(
+                        label="Upload .dspyui File",
+                        file_types=[".dspyui"],
+                        type="filepath"
+                    )
+                    import_btn = gr.Button("Import", variant="primary")
+
+                import_status = gr.Markdown()
+
+                def handle_import(filepath):
+                    if filepath is None:
+                        return "⚠️ Please select a .dspyui file to import"
+
+                    from core import import_consolidated_program
+                    success, message, human_readable_id = import_consolidated_program(filepath)
+
+                    if success:
+                        # Refresh the prompts list
+                        return message + "\n\n**Note:** Refresh the page to see the imported program in the list below."
+                    else:
+                        return message
+
+                import_btn.click(
+                    handle_import,
+                    inputs=[dspyui_upload],
+                    outputs=[import_status]
+                )
+
+            gr.Markdown("---")
+
             prompts = list_prompts()
 
             selected_prompt = gr.State(None)
-            
+
             # Extract unique signatures for the dropdown
             unique_signatures = sorted(set(p["Signature"] for p in prompts))
 
