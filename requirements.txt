@@ -26,3 +26,4 @@ dspy-ai>=3.0.0
 # Development Tools
 mypy>=1.18.0  # Type checking
 pydantic>=2.0.0  # Data validation (already included via dspy-ai but pinning explicitly)
+types-requests>=2.32.0  # Type stubs for requests library
