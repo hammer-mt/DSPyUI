@@ -178,4 +178,5 @@ dspy-docs.md
 .agent/
 test_env/
 test_logs/
+tests/test_data/
 consolidated_programs/
