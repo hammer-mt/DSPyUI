@@ -6,7 +6,7 @@ None currently! Previous bugs were fixed:
 ## Backlog
 - ✅ Upgrade to DSPy 3.0 and latest version of gradio (COMPLETED - DSPy 3.0.3, Gradio 5.48.0)
 - ✅ Build some way to chain the modules together in agentic workflows (COMPLETED - Chain Builder tab with sequential module chaining)
-- add a place to put API keys then push to gradio spaces: https://x.com/victormustar/status/1844844179962450331?t=o-wTXyD8CsXllPfRGN3wMg&s=03
+- ✅ add a place to put API keys then push to gradio spaces (COMPLETED - Settings tab with API key inputs, app.py for Spaces deployment)
 - ✅ add cost tracking and prediction of cost to the interface (COMPLETED - actual cost tracking and display in UI)
 - support all the various optimizers and modules in the interface:
     - ✅ ProgramOfThought (COMPLETED - requires deno for code execution)
