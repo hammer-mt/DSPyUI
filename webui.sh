@@ -55,15 +55,8 @@ else
         anthropic \
         groq \
         scikit-learn \
-        google-generativeai
-fi
-
-# Install vendored DSPy in editable mode
-echo "Installing vendored DSPy..."
-if [ -d "dspy" ]; then
-    pip install -e ./dspy
-else
-    echo "Warning: vendored dspy directory not found. The application may not work correctly."
+        google-generativeai \
+        "dspy-ai>=3.0.0"
 fi
 
 # Check if the Python script exists
