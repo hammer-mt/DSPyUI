@@ -1184,6 +1184,57 @@ def export_to_consolidated(human_readable_id: str) -> Optional[str]:
     return output_path
 
 
+def import_consolidated_program(filepath: str) -> Tuple[bool, str, str]:
+    """
+    Import a .dspyui file and save its components to the standard locations.
+
+    Args:
+        filepath: Path to the .dspyui file to import
+
+    Returns:
+        Tuple of (success: bool, message: str, human_readable_id: str)
+    """
+    try:
+        # Load the consolidated file
+        prompt_config, compiled_program_data, dataset = load_consolidated_program(filepath)
+
+        # Get the human_readable_id
+        human_readable_id = prompt_config.get('human_readable_id')
+        if not human_readable_id:
+            return False, "Error: No human_readable_id found in .dspyui file", ""
+
+        # Create directories if they don't exist
+        os.makedirs("prompts", exist_ok=True)
+        os.makedirs("programs", exist_ok=True)
+        os.makedirs("datasets", exist_ok=True)
+
+        # Save prompt config
+        prompt_path = f"prompts/{human_readable_id}.json"
+        with open(prompt_path, 'w') as f:
+            json.dump(prompt_config, f, indent=2)
+
+        # Save compiled program
+        program_path = f"programs/{human_readable_id}.json"
+        with open(program_path, 'w') as f:
+            json.dump(compiled_program_data, f, indent=2)
+
+        # Save dataset
+        dataset_path = f"datasets/{human_readable_id}.csv"
+        dataset.to_csv(dataset_path, index=False)
+
+        success_msg = f"✅ Successfully imported program '{human_readable_id}'\n\n"
+        success_msg += f"- Prompt config: `{prompt_path}`\n"
+        success_msg += f"- Compiled program: `{program_path}`\n"
+        success_msg += f"- Dataset: `{dataset_path}`"
+
+        return True, success_msg, human_readable_id
+
+    except Exception as e:
+        import traceback
+        error_msg = f"❌ Import failed: {str(e)}\n\n```\n{traceback.format_exc()}\n```"
+        return False, error_msg, ""
+
+
 # ========================================
 # LM Configuration Helper
 # ========================================
