@@ -877,6 +877,291 @@ with gr.Blocks(css=custom_css) as demo:
                 ]
             )
 
+        with gr.TabItem("Build Chain"):
+            gr.Markdown("# 🔗 Chain Builder")
+            gr.Markdown("""
+            Create multi-step DSPy programs by chaining modules together. Each step's output becomes available as input to subsequent steps.
+
+            **Example use case**: First step extracts keywords from text, second step uses those keywords to generate a summary.
+            """)
+
+            # Chain configuration
+            with gr.Row():
+                chain_name = gr.Textbox(label="Chain Name", placeholder="e.g., Text Analyzer")
+                chain_description = gr.Textbox(label="Description", placeholder="e.g., Extracts keywords then summarizes")
+
+            # Initial inputs and final outputs
+            gr.Markdown("### Chain Inputs and Outputs")
+            gr.Markdown("Define the overall inputs to your chain and what final outputs you want to track.")
+
+            with gr.Row():
+                with gr.Column():
+                    chain_inputs_text = gr.Textbox(
+                        label="Initial Inputs (comma-separated)",
+                        placeholder="e.g., text, topic",
+                        info="Fields that will be provided when running the chain"
+                    )
+                with gr.Column():
+                    chain_outputs_text = gr.Textbox(
+                        label="Final Outputs (comma-separated)",
+                        placeholder="e.g., summary, keywords",
+                        info="Fields to evaluate in the final result"
+                    )
+
+            # Steps configuration
+            gr.Markdown("### Chain Steps")
+            gr.Markdown("Add steps to your chain. Each step is a DSPy module that processes inputs and produces outputs.")
+
+            chain_steps_state = gr.State([])
+
+            with gr.Column():
+                @gr.render(inputs=[chain_steps_state])
+                def render_chain_steps(steps):
+                    if not steps:
+                        gr.Markdown("*No steps added yet. Click 'Add Step' to begin.*")
+                    else:
+                        for i, step in enumerate(steps):
+                            with gr.Group():
+                                gr.Markdown(f"**Step {i+1}: {step.get('module_type', 'Unknown')}**")
+                                with gr.Row():
+                                    gr.Textbox(
+                                        value=step.get('signature', ''),
+                                        label="Signature",
+                                        interactive=False,
+                                        scale=2
+                                    )
+                                    gr.Textbox(
+                                        value=step.get('instructions', ''),
+                                        label="Instructions",
+                                        interactive=False,
+                                        scale=2
+                                    )
+                                gr.Textbox(
+                                    value=json.dumps(step.get('input_mapping', {})),
+                                    label="Input Mapping (JSON)",
+                                    interactive=False
+                                )
+
+            # Add step form
+            gr.Markdown("### Add New Step")
+            with gr.Row():
+                step_module_type = gr.Dropdown(
+                    choices=["Predict", "ChainOfThought", "ChainOfThoughtWithHint", "ProgramOfThought"],
+                    label="Module Type",
+                    value="ChainOfThought"
+                )
+                step_signature = gr.Textbox(
+                    label="Signature",
+                    placeholder="e.g., text -> keywords",
+                    info="Define inputs and outputs for this step"
+                )
+
+            step_instructions = gr.Textbox(
+                label="Instructions (optional)",
+                placeholder="e.g., Extract the main keywords from the text",
+                lines=2
+            )
+
+            step_input_mapping = gr.Textbox(
+                label="Input Mapping (JSON)",
+                placeholder='e.g., {"text": "text"}',
+                info="Map step inputs to chain inputs or previous step outputs. Format: {\"step_input\": \"source_field\"}",
+                lines=2
+            )
+
+            with gr.Row():
+                add_step_btn = gr.Button("➕ Add Step", variant="primary")
+                clear_steps_btn = gr.Button("🗑️ Clear All Steps", variant="stop")
+
+            def add_chain_step(steps, module_type, signature, instructions, input_mapping_str):
+                try:
+                    input_mapping = json.loads(input_mapping_str) if input_mapping_str else {}
+                except json.JSONDecodeError:
+                    return steps, "❌ Invalid JSON in input mapping"
+
+                new_step = {
+                    "module_type": module_type,
+                    "signature": signature,
+                    "instructions": instructions,
+                    "input_mapping": input_mapping
+                }
+
+                updated_steps = steps + [new_step]
+                return updated_steps, f"✅ Added step {len(updated_steps)}"
+
+            def clear_chain_steps():
+                return [], "🗑️ Cleared all steps"
+
+            step_status = gr.Markdown()
+
+            add_step_btn.click(
+                add_chain_step,
+                inputs=[chain_steps_state, step_module_type, step_signature, step_instructions, step_input_mapping],
+                outputs=[chain_steps_state, step_status]
+            )
+
+            clear_steps_btn.click(
+                clear_chain_steps,
+                outputs=[chain_steps_state, step_status]
+            )
+
+            # Dataset upload
+            gr.Markdown("### Training Data")
+            chain_dataset_upload = gr.File(label="Upload CSV Dataset", file_types=[".csv"])
+            chain_dataset_preview = gr.Dataframe(label="Dataset Preview", interactive=False)
+
+            def preview_chain_dataset(file):
+                if file is None:
+                    return None
+                df = pd.read_csv(file.name)
+                return df.head(10)
+
+            chain_dataset_upload.change(
+                preview_chain_dataset,
+                inputs=[chain_dataset_upload],
+                outputs=[chain_dataset_preview]
+            )
+
+            # Model and optimizer configuration
+            gr.Markdown("### Model & Optimization")
+            with gr.Row():
+                chain_model = gr.Dropdown(
+                    choices=[
+                        "gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo",
+                        "claude-3-5-sonnet-20240620", "claude-3-opus-20240229",
+                        "mixtral-8x7b-32768", "llama3-70b-8192", "gemini-1.5-flash"
+                    ],
+                    label="Model",
+                    value="gpt-4o-mini"
+                )
+                chain_optimizer = gr.Dropdown(
+                    choices=["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "LabeledFewShot", "MIPROv2", "COPRO", "BootstrapFinetune"],
+                    label="Optimizer",
+                    value="BootstrapFewShot"
+                )
+                chain_metric = gr.Dropdown(
+                    choices=["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
+                    label="Evaluation Metric",
+                    value="Exact Match"
+                )
+
+            # Compile button and results
+            chain_compile_btn = gr.Button("🔨 Compile Chain", variant="primary", size="lg")
+            chain_compile_status = gr.Markdown()
+            chain_results = gr.JSON(label="Compilation Results")
+
+            def compile_chain_ui(name, description, inputs_str, outputs_str, steps, dataset_file, model, optimizer, metric):
+                from core import compile_chain, save_chain_program
+                import os
+
+                # Validation
+                if not name:
+                    return "❌ Please provide a chain name", None
+                if not steps:
+                    return "❌ Please add at least one step", None
+                if dataset_file is None:
+                    return "❌ Please upload a training dataset", None
+
+                try:
+                    # Parse inputs and outputs
+                    initial_inputs = [s.strip() for s in inputs_str.split(",") if s.strip()]
+                    final_outputs = [s.strip() for s in outputs_str.split(",") if s.strip()]
+
+                    if not initial_inputs:
+                        return "❌ Please specify initial inputs", None
+                    if not final_outputs:
+                        return "❌ Please specify final outputs", None
+
+                    # Load dataset
+                    dataset = pd.read_csv(dataset_file.name)
+
+                    # Build chain config
+                    chain_config = {
+                        "name": name,
+                        "description": description,
+                        "initial_inputs": initial_inputs,
+                        "final_outputs": final_outputs,
+                        "steps": steps
+                    }
+
+                    # Get API key from environment
+                    api_key = os.getenv("OPENAI_API_KEY")
+                    provider = "openai"
+                    if "claude" in model:
+                        api_key = os.getenv("ANTHROPIC_API_KEY")
+                        provider = "anthropic"
+                    elif "mixtral" in model or "llama" in model or "gemma" in model:
+                        api_key = os.getenv("GROQ_API_KEY")
+                        provider = "groq"
+                    elif "gemini" in model:
+                        api_key = os.getenv("GOOGLE_API_KEY")
+                        provider = "google"
+
+                    # Compile chain
+                    compiled_chain, eval_results, cost_data = compile_chain(
+                        chain_config=chain_config,
+                        dataset=dataset,
+                        model=model,
+                        optimizer_name=optimizer,
+                        metric_type=metric,
+                        provider=provider,
+                        api_key=api_key,
+                        max_bootstrapped_demos=5,  # Conservative for cost
+                        max_labeled_demos=5
+                    )
+
+                    # Save chain
+                    date_str = datetime.datetime.now().strftime("%Y%m%d")
+                    chain_id = f"{name.replace(' ', '')}-{model.replace('-', '').replace('.', '')[:15]}_{optimizer[:15]}-{date_str}"
+
+                    saved_path = save_chain_program(
+                        human_readable_id=chain_id,
+                        chain_config=chain_config,
+                        compiled_chain=compiled_chain,
+                        dataset=dataset,
+                        evaluation_results=eval_results,
+                        cost_data=cost_data,
+                        model=model,
+                        optimizer_name=optimizer,
+                        metric_type=metric
+                    )
+
+                    results = {
+                        "chain_id": chain_id,
+                        "evaluation_score": eval_results["score"],
+                        "train_set_size": eval_results["train_set_size"],
+                        "dev_set_size": eval_results["dev_set_size"],
+                        "cost_usd": cost_data.get("actual_cost_usd", 0),
+                        "total_tokens": cost_data.get("total_tokens", 0),
+                        "saved_to": saved_path
+                    }
+
+                    status_msg = f"""
+                    ✅ **Chain compiled successfully!**
+
+                    - **ID**: {chain_id}
+                    - **Evaluation Score**: {eval_results['score']:.2%}
+                    - **Cost**: ${cost_data.get('actual_cost_usd', 0):.4f}
+                    - **Tokens**: {cost_data.get('total_tokens', 0):,}
+                    - **Saved to**: `{saved_path}`
+                    """
+
+                    return status_msg, results
+
+                except Exception as e:
+                    import traceback
+                    error_msg = f"❌ **Compilation failed**\n\n```\n{str(e)}\n{traceback.format_exc()}\n```"
+                    return error_msg, None
+
+            chain_compile_btn.click(
+                compile_chain_ui,
+                inputs=[
+                    chain_name, chain_description, chain_inputs_text, chain_outputs_text,
+                    chain_steps_state, chain_dataset_upload, chain_model, chain_optimizer, chain_metric
+                ],
+                outputs=[chain_compile_status, chain_results]
+            )
+
         with gr.TabItem("View Prompts"):
             
             prompts = list_prompts()
