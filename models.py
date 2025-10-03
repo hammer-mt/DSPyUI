@@ -208,6 +208,13 @@ class PromptDetails(BaseModel):
     max_iters: int = 3
     k: int = 16
 
+    # Cost tracking fields
+    estimated_cost: Optional[float] = None
+    actual_cost: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+
     model_config = ConfigDict(frozen=False)
 
     @classmethod
