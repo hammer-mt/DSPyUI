@@ -269,6 +269,7 @@ with gr.Blocks(css=custom_css) as demo:
                             judge_prompt_id = data[judge_prompt].split(' - ')[0]
 
                         hint = data[hint_textbox] if data[dspy_module] == "ChainOfThoughtWithHint" else None
+                        max_iters_value = int(data[max_iters]) if data[dspy_module] == "ProgramOfThought" else 3
 
                         # Get base URLs for local LLMs
                         student_base_url = data.get(llm_base_url) if data[llm_model].startswith("local:") else None
@@ -288,6 +289,7 @@ with gr.Blocks(css=custom_css) as demo:
                             input_descs,
                             output_descs,
                             hint,  # Add the hint parameter
+                            max_iters_value,  # Add the max_iters parameter
                             student_base_url,  # Add base URL for student model
                             teacher_base  # Add base URL for teacher model
                         )
@@ -336,7 +338,9 @@ with gr.Blocks(css=custom_css) as demo:
                             "usage_instructions": usage_instructions,
                             "human_readable_id": human_readable_id,
                             "metric_type": data[metric_type],
-                            "judge_prompt_id": judge_prompt_id
+                            "judge_prompt_id": judge_prompt_id,
+                            "hint": hint,
+                            "max_iters": max_iters_value
                         }
 
                         row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
@@ -417,7 +421,7 @@ with gr.Blocks(css=custom_css) as demo:
                 
                 compile_button.click(
                     compile,
-                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, llm_base_url, teacher_base_url]),
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, max_iters, llm_base_url, teacher_base_url]),
                     outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score]
                 )
 
@@ -539,6 +543,16 @@ with gr.Blocks(css=custom_css) as demo:
                         visible=False,
                         interactive=True  # Add this line
                     )
+                    max_iters = gr.Slider(
+                        minimum=1,
+                        maximum=10,
+                        value=3,
+                        step=1,
+                        label="Max Iterations",
+                        info="Maximum number of code generation attempts for ProgramOfThought module.",
+                        visible=False,
+                        interactive=True
+                    )
 
             with gr.Row():
                 optimizer = gr.Dropdown(
@@ -656,12 +670,14 @@ with gr.Blocks(css=custom_css) as demo:
 
                 return default_error
 
-            # Function to show/hide the hint textbox based on the selected module
-            def update_hint_visibility(module):
-                return gr.update(visible=module == "ChainOfThoughtWithHint")
+            # Function to show/hide the hint textbox and max_iters based on the selected module
+            def update_module_params_visibility(module):
+                hint_visible = module == "ChainOfThoughtWithHint"
+                max_iters_visible = module == "ProgramOfThought"
+                return gr.update(visible=hint_visible), gr.update(visible=max_iters_visible)
 
             # Connect the visibility update function to the module dropdown
-            dspy_module.change(update_hint_visibility, inputs=[dspy_module], outputs=[hint_textbox])
+            dspy_module.change(update_module_params_visibility, inputs=[dspy_module], outputs=[hint_textbox, max_iters])
 
 
             def load_prompt_into_compiler(prompt_data):
@@ -721,6 +737,10 @@ with gr.Blocks(css=custom_css) as demo:
                         value=details.get('hint', ''),
                         visible=details['dspy_module'] == "ChainOfThoughtWithHint"
                     ),  # hint_textbox (value and visibility)
+                    gr.update(
+                        value=details.get('max_iters', 3),
+                        visible=details['dspy_module'] == "ProgramOfThought"
+                    ),  # max_iters (value and visibility)
                     gr.update(
                         value=f"✅ **Loaded prompt:** {details['human_readable_id']}\n\nAll settings have been populated. You can now modify them or re-compile the program.",
                         visible=True
@@ -796,7 +816,7 @@ with gr.Blocks(css=custom_css) as demo:
                 outputs=[
                     instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module,
                     input_values, output_values, file_data,
-                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox,
+                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox, max_iters,
                     loaded_prompt_info
                 ]
             )
