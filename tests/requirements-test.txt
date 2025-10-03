@@ -1,0 +1,11 @@
+# Testing dependencies for DSPyUI
+
+# Core testing framework
+pytest>=7.4.0
+pytest-playwright>=0.4.0
+
+# For API testing
+requests>=2.31.0
+
+# Install Playwright browsers after installing pytest-playwright:
+# playwright install chromium
