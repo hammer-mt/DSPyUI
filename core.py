@@ -53,7 +53,7 @@ def create_custom_signature(
             fields[field] = (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"}))
 
     # Create a BaseModel subclass dynamically
-    CustomSignatureModel: Type[BaseModel] = create_model('CustomSignatureModel', **fields)  # type: ignore[call-overload]
+    CustomSignatureModel: Type[BaseModel] = create_model('CustomSignatureModel', **fields)
 
     class CustomSignature(dspy.Signature, CustomSignatureModel):  # type: ignore[misc,valid-type]
         """
