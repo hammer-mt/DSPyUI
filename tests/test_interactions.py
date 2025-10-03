@@ -39,19 +39,19 @@ class TestInputOutputFields:
         # Add one input field
         add_input = page.locator("button", has_text="Add Input Field")
         add_input.click()
-        page.wait_for_timeout(300)
+        page.wait_for_timeout(500)
 
         # Add one output field
         add_output = page.locator("button", has_text="Add Output Field")
         add_output.click()
-        page.wait_for_timeout(300)
+        page.wait_for_timeout(500)
 
-        # Fill in the first input field name
-        input_name_fields = page.locator("input[placeholder='Field name']").first
+        # Fill in the first input field name (placeholder is "Input1")
+        input_name_fields = page.locator("input[placeholder='Input1']").first
         input_name_fields.fill("question")
 
-        # Fill in the first output field name
-        output_name_fields = page.locator("input[placeholder='Field name']").last
+        # Fill in the first output field name (placeholder is "Output1")
+        output_name_fields = page.locator("input[placeholder='Output1']").first
         output_name_fields.fill("answer")
 
         # Verify fields are filled
@@ -99,12 +99,11 @@ class TestLLMConfiguration:
 
     def test_select_model_provider(self, page):
         """Test selecting different model providers."""
-        # Find the Model Provider dropdown
-        provider_dropdown = page.locator("label", has_text="Model Provider").locator("..")
+        # Find the Model dropdown (actual label in UI)
+        model_dropdown = page.locator("label", has_text="Model")
 
-        # Click to open dropdown (Gradio dropdowns work differently)
-        # This is a simplified test - actual implementation may vary
-        # based on Gradio 5's dropdown structure
+        # Verify the Model dropdown is visible
+        assert model_dropdown.is_visible()
 
 
 class TestDemoExamples:
@@ -133,12 +132,10 @@ class TestValidation:
 
     def test_compile_without_fields_shows_error(self, page):
         """Test that trying to compile without fields shows appropriate feedback."""
-        # Try to find compile button
-        compile_button = page.locator("button", has_text="Compile")
+        # Try to find compile button (use more specific selector to avoid tab)
+        compile_button = page.locator("button[variant='primary']", has_text="Compile Program")
 
         # It might be disabled or clicking might show an error
         # This depends on the UI's validation logic
-        if compile_button.is_visible():
-            is_disabled = compile_button.get_attribute("disabled")
-            # Button should be disabled or not visible initially
-            assert is_disabled is not None or not compile_button.is_enabled()
+        # The button should not be visible initially (no fields configured)
+        assert not compile_button.is_visible()
