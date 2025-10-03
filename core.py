@@ -1182,3 +1182,411 @@ def export_to_consolidated(human_readable_id: str) -> Optional[str]:
     )
 
     return output_path
+
+
+# ========================================
+# Chain Building Functions
+# ========================================
+
+class ChainedProgram(dspy.Module):
+    """
+    A DSPy module that chains multiple modules together sequentially.
+    Output from each step becomes input to the next step based on field mapping.
+    """
+
+    def __init__(self, steps: List[Dict[str, Any]]):
+        """
+        Initialize a chained program.
+
+        Args:
+            steps: List of step configurations, each containing:
+                - module: The DSPy module instance
+                - input_mapping: Dict mapping chain inputs/previous outputs to module inputs
+                - output_fields: List of output field names from this step
+        """
+        super().__init__()
+        self.steps = steps
+
+        # Store modules as attributes for DSPy to track them
+        for i, step in enumerate(steps):
+            setattr(self, f"step_{i}", step["module"])
+
+    def forward(self, **inputs):
+        """Execute the chain sequentially."""
+        # Start with initial inputs
+        context = dict(inputs)
+
+        # Execute each step
+        for i, step in enumerate(self.steps):
+            module = step["module"]
+            input_mapping = step["input_mapping"]
+
+            # Prepare inputs for this step based on mapping
+            step_inputs = {}
+            for module_input, source in input_mapping.items():
+                if source in context:
+                    step_inputs[module_input] = context[source]
+                else:
+                    raise ValueError(f"Step {i}: Cannot find '{source}' in context. Available: {list(context.keys())}")
+
+            # Execute this step
+            result = module(**step_inputs)
+
+            # Add outputs to context
+            for field in step["output_fields"]:
+                if hasattr(result, field):
+                    context[field] = getattr(result, field)
+
+        # Return final prediction with all accumulated context
+        return dspy.Prediction(**context)
+
+
+def create_chain_step(
+    module_type: str,
+    signature_str: str,
+    instructions: str = ""
+) -> dspy.Module:
+    """
+    Create a single step (module) for a chain.
+
+    Args:
+        module_type: Type of module ('Predict', 'ChainOfThought', etc.)
+        signature_str: Signature string (e.g., 'input -> output')
+        instructions: Optional instructions for the module
+
+    Returns:
+        Configured DSPy module
+    """
+    # Create signature with instructions if provided
+    if instructions:
+        signature = dspy.Signature(signature_str, instructions)
+    else:
+        signature = signature_str
+
+    # Create module based on type
+    if module_type == "Predict":
+        return dspy.Predict(signature)
+    elif module_type == "ChainOfThought":
+        return dspy.ChainOfThought(signature)
+    elif module_type == "ChainOfThoughtWithHint":
+        return dspy.ChainOfThoughtWithHint(signature)
+    elif module_type == "ProgramOfThought":
+        return dspy.ProgramOfThought(signature)
+    else:
+        raise ValueError(f"Unsupported module type: {module_type}")
+
+
+def compile_chain(
+    chain_config: Dict[str, Any],
+    dataset: pd.DataFrame,
+    model: str,
+    optimizer_name: str = "BootstrapFewShot",
+    metric_type: str = "Exact Match",
+    judge_prompt_id: Optional[str] = None,
+    provider: str = "openai",
+    api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    max_bootstrapped_demos: int = 8,
+    max_labeled_demos: int = 8
+) -> Tuple[ChainedProgram, Dict[str, Any], Dict[str, Any]]:
+    """
+    Compile a chained program using DSPy optimizers.
+
+    Args:
+        chain_config: Configuration dict containing:
+            - name: Name of the chain
+            - description: Description
+            - initial_inputs: List of input field names for the entire chain
+            - final_outputs: List of output field names from the final step
+            - steps: List of step configs with module_type, signature, instructions, input_mapping
+        dataset: Training data
+        model: LLM model name
+        optimizer_name: Name of DSPy optimizer
+        metric_type: Evaluation metric type
+        judge_prompt_id: Optional judge prompt ID for LLM-as-a-Judge
+        provider: LLM provider
+        api_key: API key
+        llm_base_url: Base URL for local LLMs
+        max_bootstrapped_demos: Max examples for bootstrap optimizers
+        max_labeled_demos: Max examples for labeled optimizers
+
+    Returns:
+        Tuple of (compiled_chain, evaluation_results, cost_data)
+    """
+    # Configure LM
+    configure_lm(model, provider, api_key, llm_base_url)
+
+    # Create chain steps
+    chain_steps = []
+    for step_config in chain_config["steps"]:
+        module = create_chain_step(
+            step_config["module_type"],
+            step_config["signature"],
+            step_config.get("instructions", "")
+        )
+
+        # Parse output fields from signature
+        sig_parts = step_config["signature"].split("->")
+        if len(sig_parts) != 2:
+            raise ValueError(f"Invalid signature: {step_config['signature']}")
+        output_part = sig_parts[1].strip()
+        output_fields = [f.strip() for f in output_part.split(",")]
+
+        chain_steps.append({
+            "module": module,
+            "input_mapping": step_config["input_mapping"],
+            "output_fields": output_fields
+        })
+
+    # Create chained program
+    chain_program = ChainedProgram(chain_steps)
+
+    # Prepare training data
+    trainset = []
+    for _, row in dataset.iterrows():
+        example_dict = row.to_dict()
+        trainset.append(dspy.Example(**example_dict).with_inputs(*chain_config["initial_inputs"]))
+
+    # Split into train/dev sets
+    split_point = int(len(trainset) * 0.8)
+    train_examples = trainset[:split_point]
+    dev_examples = trainset[split_point:] if split_point < len(trainset) else trainset[:2]
+
+    # Create evaluation metric
+    metric = create_evaluation_metric(metric_type, chain_config["final_outputs"], judge_prompt_id)
+
+    # Configure and run optimizer
+    if optimizer_name == "LabeledFewShot":
+        optimizer = LabeledFewShot(k=min(max_labeled_demos, len(train_examples)))
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples)
+    elif optimizer_name == "BootstrapFewShot":
+        optimizer = BootstrapFewShot(
+            metric=metric,
+            max_bootstrapped_demos=min(max_bootstrapped_demos, len(train_examples))
+        )
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples)
+    elif optimizer_name == "BootstrapFewShotWithRandomSearch":
+        optimizer = BootstrapFewShotWithRandomSearch(
+            metric=metric,
+            max_bootstrapped_demos=min(max_bootstrapped_demos, len(train_examples)),
+            num_candidate_programs=3
+        )
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples)
+    elif optimizer_name == "MIPROv2":
+        optimizer = MIPROv2(
+            metric=metric,
+            num_candidates=3,
+            init_temperature=0.7
+        )
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples, num_trials=5, max_bootstrapped_demos=max_bootstrapped_demos, max_labeled_demos=max_labeled_demos)
+    elif optimizer_name == "COPRO":
+        optimizer = COPRO(metric=metric, breadth=3, depth=1)
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples, eval_kwargs={"num_threads": 1})
+    elif optimizer_name == "BootstrapFinetune":
+        optimizer = BootstrapFinetune(metric=metric)
+        compiled_chain = optimizer.compile(chain_program, trainset=train_examples)
+    else:
+        raise ValueError(f"Unsupported optimizer: {optimizer_name}")
+
+    # Evaluate on dev set
+    evaluator = Evaluate(devset=dev_examples, metric=metric, num_threads=1, display_progress=True)
+    score = evaluator(compiled_chain)
+
+    # Calculate cost
+    cost_data = calculate_actual_cost(dspy.settings.lm.history, model)
+
+    evaluation_results = {
+        "score": score,
+        "dev_set_size": len(dev_examples),
+        "train_set_size": len(train_examples)
+    }
+
+    return compiled_chain, evaluation_results, cost_data
+
+
+def save_chain_program(
+    human_readable_id: str,
+    chain_config: Dict[str, Any],
+    compiled_chain: ChainedProgram,
+    dataset: pd.DataFrame,
+    evaluation_results: Dict[str, Any],
+    cost_data: Dict[str, Any],
+    model: str,
+    optimizer_name: str,
+    metric_type: str
+) -> str:
+    """
+    Save a compiled chain program and its configuration.
+
+    Args:
+        human_readable_id: Unique ID for the chain
+        chain_config: Chain configuration dict
+        compiled_chain: Compiled ChainedProgram
+        dataset: Training dataset
+        evaluation_results: Evaluation results dict
+        cost_data: Cost tracking data
+        model: Model name
+        optimizer_name: Optimizer name
+        metric_type: Metric type
+
+    Returns:
+        Path to saved consolidated file
+    """
+    # Create directories
+    os.makedirs("chains", exist_ok=True)
+    os.makedirs("consolidated_programs", exist_ok=True)
+
+    # Save chain program
+    chain_path = f"chains/{human_readable_id}.json"
+    compiled_chain.save(chain_path)
+
+    # Create metadata
+    metadata = {
+        "human_readable_id": human_readable_id,
+        "chain_name": chain_config["name"],
+        "description": chain_config.get("description", ""),
+        "model": model,
+        "optimizer": optimizer_name,
+        "metric": metric_type,
+        "evaluation_score": evaluation_results["score"],
+        "train_set_size": evaluation_results["train_set_size"],
+        "dev_set_size": evaluation_results["dev_set_size"],
+        "actual_cost": cost_data.get("actual_cost_usd", 0),
+        "total_tokens": cost_data.get("total_tokens", 0),
+        "input_tokens": cost_data.get("input_tokens", 0),
+        "output_tokens": cost_data.get("output_tokens", 0),
+        "created_at": datetime.datetime.now().isoformat(),
+        "chain_config": chain_config
+    }
+
+    # Save metadata
+    metadata_path = f"chains/{human_readable_id}_metadata.json"
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+    # Save consolidated file
+    with open(chain_path, 'r') as f:
+        compiled_chain_data = json.load(f)
+
+    consolidated_data = {
+        "version": "1.0",
+        "type": "chain",
+        "human_readable_id": human_readable_id,
+        "metadata": {
+            "created_at": datetime.datetime.now().isoformat(),
+            "dspy_version": "3.0.3",
+            "dspyui_version": "1.0"
+        },
+        "chain_config": chain_config,
+        "model_config": {
+            "model": model,
+            "optimizer": optimizer_name,
+            "metric": metric_type
+        },
+        "evaluation_results": evaluation_results,
+        "cost_data": cost_data,
+        "compiled_program": compiled_chain_data,
+        "dataset": {
+            "columns": list(dataset.columns),
+            "data": dataset.to_dict('records')
+        }
+    }
+
+    consolidated_path = f"consolidated_programs/{human_readable_id}.dspyui"
+    with open(consolidated_path, 'w') as f:
+        json.dump(consolidated_data, f, indent=2)
+
+    return consolidated_path
+
+
+def execute_chain(
+    human_readable_id: str,
+    inputs: Dict[str, Any]
+) -> Tuple[dspy.Prediction, Optional[float]]:
+    """
+    Execute a saved chain program on new inputs.
+
+    Args:
+        human_readable_id: ID of the saved chain
+        inputs: Dict of input values
+
+    Returns:
+        Tuple of (prediction, evaluation_score)
+    """
+    # Load chain
+    chain_path = f"chains/{human_readable_id}.json"
+    metadata_path = f"chains/{human_readable_id}_metadata.json"
+
+    if not os.path.exists(chain_path):
+        raise FileNotFoundError(f"Chain not found: {chain_path}")
+
+    with open(metadata_path, 'r') as f:
+        metadata = json.load(f)
+
+    # Create chain structure from config
+    chain_config = metadata["chain_config"]
+    chain_steps = []
+    for step_config in chain_config["steps"]:
+        module = create_chain_step(
+            step_config["module_type"],
+            step_config["signature"],
+            step_config.get("instructions", "")
+        )
+
+        sig_parts = step_config["signature"].split("->")
+        output_part = sig_parts[1].strip()
+        output_fields = [f.strip() for f in output_part.split(",")]
+
+        chain_steps.append({
+            "module": module,
+            "input_mapping": step_config["input_mapping"],
+            "output_fields": output_fields
+        })
+
+    # Load compiled chain
+    chain_program = ChainedProgram(chain_steps)
+    chain_program.load(chain_path)
+
+    # Execute
+    prediction = chain_program(**inputs)
+
+    return prediction, None
+
+
+def list_chains(
+    name_filter: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    List all saved chain programs.
+
+    Args:
+        name_filter: Optional filter string for chain names
+
+    Returns:
+        List of chain metadata dicts
+    """
+    if not os.path.exists('chains'):
+        return []
+
+    chains = []
+    for file in os.listdir('chains'):
+        if file.endswith('_metadata.json'):
+            with open(os.path.join('chains', file), 'r') as f:
+                metadata = json.load(f)
+
+                if name_filter and name_filter.lower() not in metadata["chain_name"].lower():
+                    continue
+
+                chains.append({
+                    "ID": metadata["human_readable_id"],
+                    "Name": metadata["chain_name"],
+                    "Description": metadata.get("description", ""),
+                    "Steps": len(metadata["chain_config"]["steps"]),
+                    "Eval Score": metadata.get("evaluation_score", "N/A"),
+                    "Cost": metadata.get("actual_cost", 0),
+                    "Tokens": metadata.get("total_tokens", 0),
+                    "Model": metadata.get("model", ""),
+                    "Details": json.dumps(metadata, indent=2)
+                })
+
+    return chains
