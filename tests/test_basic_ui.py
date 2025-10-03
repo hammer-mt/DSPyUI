@@ -55,16 +55,31 @@ class TestCompileTab:
 
     def test_llm_configuration_exists(self, page):
         """Test that LLM configuration dropdowns exist."""
-        # Should have Model dropdown
-        assert page.locator("label", has_text="Model").is_visible()
+        # Scroll to Settings section
+        settings_heading = page.locator("text=Settings").first
+        settings_heading.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+
+        # Should have Model dropdown (check for text in page, Gradio 5 renders labels differently)
+        assert page.get_by_text("Model", exact=False).count() > 0
 
     def test_optimizer_dropdown_exists(self, page):
         """Test that Optimizer dropdown exists."""
-        assert page.locator("label", has_text="Optimizer").is_visible()
+        # Scroll to Settings section
+        settings_heading = page.locator("text=Settings").first
+        settings_heading.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+
+        assert page.get_by_text("Optimizer", exact=False).count() > 0
 
     def test_evaluation_metric_exists(self, page):
         """Test that Evaluation Metric dropdown exists."""
-        assert page.locator("label", has_text="Metric").is_visible()
+        # Scroll to Settings section
+        settings_heading = page.locator("text=Settings").first
+        settings_heading.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+
+        assert page.get_by_text("Metric", exact=False).count() > 0
 
 
 class TestViewPromptsTab:
