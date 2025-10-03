@@ -794,3 +794,120 @@ def evaluate_single_prediction(
     metric = create_evaluation_metric(metric_type, output_fields, judge_prompt_id)
     score = metric(gold_data, prediction)
     return float(score)
+
+
+def save_consolidated_program(
+    human_readable_id: str,
+    prompt_config: Dict[str, Any],
+    compiled_program_path: str,
+    dataset: pd.DataFrame
+) -> str:
+    """
+    Save all program data to a single consolidated .dspyui file.
+
+    Args:
+        human_readable_id: Unique identifier for the program
+        prompt_config: Dictionary containing all prompt configuration
+        compiled_program_path: Path to the compiled DSPy program JSON
+        dataset: DataFrame containing the training data
+
+    Returns:
+        Path to the saved .dspyui file
+    """
+    import datetime
+
+    # Create consolidated_programs directory if it doesn't exist
+    os.makedirs("consolidated_programs", exist_ok=True)
+
+    # Load the compiled program
+    with open(compiled_program_path, 'r') as f:
+        compiled_program_data = json.load(f)
+
+    # Create consolidated structure
+    consolidated_data = {
+        "version": "1.0",
+        "human_readable_id": human_readable_id,
+        "metadata": {
+            "created_at": datetime.datetime.now().isoformat(),
+            "dspy_version": "3.0.3",
+            "dspyui_version": "1.0"
+        },
+        "prompt_config": prompt_config,
+        "compiled_program": compiled_program_data,
+        "dataset": {
+            "columns": list(dataset.columns),
+            "data": dataset.to_dict('records')
+        }
+    }
+
+    # Save to file
+    output_path = f"consolidated_programs/{human_readable_id}.dspyui"
+    with open(output_path, 'w') as f:
+        json.dump(consolidated_data, f, indent=2)
+
+    return output_path
+
+
+def load_consolidated_program(
+    filepath: str
+) -> Tuple[Dict[str, Any], Dict[str, Any], pd.DataFrame]:
+    """
+    Load program data from a consolidated .dspyui file.
+
+    Args:
+        filepath: Path to the .dspyui file
+
+    Returns:
+        Tuple of (prompt_config, compiled_program_data, dataset)
+    """
+    with open(filepath, 'r') as f:
+        consolidated_data = json.load(f)
+
+    # Validate version
+    if consolidated_data.get("version") != "1.0":
+        raise ValueError(f"Unsupported .dspyui version: {consolidated_data.get('version')}")
+
+    # Extract components
+    prompt_config = consolidated_data["prompt_config"]
+    compiled_program_data = consolidated_data["compiled_program"]
+    dataset = pd.DataFrame(
+        data=consolidated_data["dataset"]["data"],
+        columns=consolidated_data["dataset"]["columns"]
+    )
+
+    return prompt_config, compiled_program_data, dataset
+
+
+def export_to_consolidated(human_readable_id: str) -> Optional[str]:
+    """
+    Export an existing program (saved in old 3-file format) to consolidated .dspyui format.
+
+    Args:
+        human_readable_id: ID of the program to export
+
+    Returns:
+        Path to the created .dspyui file, or None if any files are missing
+    """
+    # Check if all required files exist
+    prompt_path = f"prompts/{human_readable_id}.json"
+    program_path = f"programs/{human_readable_id}.json"
+    dataset_path = f"datasets/{human_readable_id}.csv"
+
+    if not all(os.path.exists(p) for p in [prompt_path, program_path, dataset_path]):
+        return None
+
+    # Load the data
+    with open(prompt_path, 'r') as f:
+        prompt_config = json.load(f)
+
+    dataset = pd.read_csv(dataset_path)
+
+    # Save as consolidated file
+    output_path = save_consolidated_program(
+        human_readable_id,
+        prompt_config,
+        program_path,
+        dataset
+    )
+
+    return output_path
