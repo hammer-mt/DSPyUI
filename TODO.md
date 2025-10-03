@@ -7,7 +7,7 @@ None currently! Previous bugs were fixed:
 - ✅ Upgrade to DSPy 3.0 and latest version of gradio (COMPLETED - DSPy 3.0.3, Gradio 5.48.0)
 - Build some way to chain the modules together in agentic workflows (like the ComfyUI canvas approach or N8N)
 - add a place to put API keys then push to gradio spaces: https://x.com/victormustar/status/1844844179962450331?t=o-wTXyD8CsXllPfRGN3wMg&s=03
-- add cost tracking and prediction of cost to the interface
+- ✅ add cost tracking and prediction of cost to the interface (COMPLETED - actual cost tracking and display in UI)
 - support all the various optimizers and modules in the interface:
     - ✅ ProgramOfThought (COMPLETED - requires deno for code execution)
     - ✅ LabeledFewShot (COMPLETED)
