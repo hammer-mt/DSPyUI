@@ -112,9 +112,14 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
     else:
         raise ValueError(f"Unsupported DSPy module: {dspy_module}")
 
-def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None) -> str:
+def compile_program(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, example_data: List[Dict[Any, Any]], optimizer: str, instructions: str, metric_type: str, judge_prompt_id=None, input_descs: List[str] = None, output_descs: List[str] = None, hint: str = None, llm_base_url: str = None, teacher_base_url: str = None) -> str:
     # Set up the LLM model
-    if llm_model.startswith("gpt-"):
+    if llm_model.startswith("local:"):
+        # Local LLM with custom endpoint
+        model_name = llm_model[6:]  # Remove "local:" prefix
+        base_url = llm_base_url or "http://127.0.0.1:1234/v1"
+        lm = dspy.LM(f'openai/{model_name}', api_base=base_url)
+    elif llm_model.startswith("gpt-"):
         lm = dspy.LM(f'openai/{llm_model}')
     elif llm_model.startswith("claude-"):
         lm = dspy.LM(f'anthropic/{llm_model}')
@@ -132,7 +137,12 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     assert dspy.settings.lm is not None, "Failed to configure LM"
 
     # Set up the teacher model
-    if teacher_model.startswith("gpt-"):
+    if teacher_model.startswith("local:"):
+        # Local LLM with custom endpoint
+        model_name = teacher_model[6:]  # Remove "local:" prefix
+        base_url = teacher_base_url or llm_base_url or "http://127.0.0.1:1234/v1"
+        teacher_lm = dspy.LM(f'openai/{model_name}', api_base=base_url)
+    elif teacher_model.startswith("gpt-"):
         teacher_lm = dspy.LM(f'openai/{teacher_model}')
     elif teacher_model.startswith("claude-"):
         teacher_lm = dspy.LM(f'anthropic/{teacher_model}')

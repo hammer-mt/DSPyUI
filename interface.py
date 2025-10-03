@@ -269,12 +269,16 @@ with gr.Blocks(css=custom_css) as demo:
                             judge_prompt_id = data[judge_prompt].split(' - ')[0]
 
                         hint = data[hint_textbox] if data[dspy_module] == "ChainOfThoughtWithHint" else None
-                        
+
+                        # Get base URLs for local LLMs
+                        student_base_url = data.get(llm_base_url) if data[llm_model].startswith("local:") else None
+                        teacher_base = data.get(teacher_base_url) if data[teacher_model].startswith("local:") else None
+
                         usage_instructions, optimized_prompt = compile_program(
                             input_fields,
                             output_fields,
                             data[dspy_module],
-                            data[llm_model], 
+                            data[llm_model],
                             data[teacher_model],
                             data[example_data],
                             data[optimizer],
@@ -283,7 +287,9 @@ with gr.Blocks(css=custom_css) as demo:
                             judge_prompt_id,
                             input_descs,
                             output_descs,
-                            hint  # Add the hint parameter
+                            hint,  # Add the hint parameter
+                            student_base_url,  # Add base URL for student model
+                            teacher_base  # Add base URL for teacher model
                         )
                         
                         signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
@@ -411,7 +417,7 @@ with gr.Blocks(css=custom_css) as demo:
                 
                 compile_button.click(
                     compile,
-                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox]),
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, llm_base_url, teacher_base_url]),
                     outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score]
                 )
 
@@ -464,22 +470,60 @@ with gr.Blocks(css=custom_css) as demo:
                     "claude-3-5-sonnet-20240620", "claude-3-opus-20240229",
                     "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
                     "mixtral-8x7b-32768", "gemma-7b-it", "llama3-70b-8192",
-                    "llama3-8b-8192", "gemma2-9b-it", "gemini-1.5-flash-8b", "gemini-1.5-flash", "gemini-1.5-pro"
+                    "llama3-8b-8192", "gemma2-9b-it", "gemini-1.5-flash-8b", "gemini-1.5-flash", "gemini-1.5-pro",
+                    "local:qwen", "local:llama", "local:custom"
                 ]
                 llm_model = gr.Dropdown(
                     model_options,
                     label="Model",
                     value="gpt-4o-mini",
-                    info="Select the main language model for your DSPy program. This model will be used for inference. Typically you want to choose a fast and cheap model here, and train it on your task to improve quality.",
-                    interactive=True  # Add this line
+                    info="Select the main language model for your DSPy program. Use 'local:' prefix for local LLMs (LM Studio, Ollama, etc.)",
+                    interactive=True,
+                    allow_custom_value=True
                 )
                 teacher_model = gr.Dropdown(
                     model_options,
                     label="Teacher",
                     value="gpt-4o",
-                    info="Select a more capable (but slower and more expensive) model to act as a teacher during the compilation process. This model helps generate high-quality examples and refine prompts.",
-                    interactive=True  # Add this line
+                    info="Select a more capable teacher model. Can also use local LLMs with 'local:' prefix.",
+                    interactive=True,
+                    allow_custom_value=True
                 )
+
+            # Local LLM configuration
+            with gr.Row(visible=False) as local_llm_config:
+                llm_base_url = gr.Textbox(
+                    label="Student Model Base URL",
+                    value="http://127.0.0.1:1234/v1",
+                    placeholder="http://127.0.0.1:1234/v1",
+                    info="Base URL for local LLM API (LM Studio, Ollama, llama.cpp server)",
+                    scale=1
+                )
+                teacher_base_url = gr.Textbox(
+                    label="Teacher Model Base URL",
+                    value="http://127.0.0.1:1234/v1",
+                    placeholder="http://127.0.0.1:1234/v1",
+                    info="Base URL for teacher model (can be same or different endpoint)",
+                    scale=1
+                )
+
+            # Show/hide local LLM config based on model selection
+            def update_local_config_visibility(student_model, teacher_model):
+                show = student_model.startswith("local:") or teacher_model.startswith("local:")
+                return gr.update(visible=show)
+
+            llm_model.change(
+                update_local_config_visibility,
+                inputs=[llm_model, teacher_model],
+                outputs=[local_llm_config]
+            )
+            teacher_model.change(
+                update_local_config_visibility,
+                inputs=[llm_model, teacher_model],
+                outputs=[local_llm_config]
+            )
+
+            with gr.Row():
                 with gr.Column():
                     dspy_module = gr.Dropdown(
                         ["Predict", "ChainOfThought", "ChainOfThoughtWithHint"],
