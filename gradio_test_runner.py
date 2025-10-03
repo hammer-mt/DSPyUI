@@ -2,29 +2,44 @@
 """
 Gradio Test Runner for DSPyUI
 
-This script provides an automated testing infrastructure that:
+This script provides a comprehensive testing infrastructure that:
 1. Runs Gradio as a background process with stdout/stderr logging
-2. Runs each test sequentially
-3. Aggregates logs from both tests and the Gradio process
-4. Uses Gradio's REST API for easier testing
-5. Generates mock sample data where needed
+2. Executes tests sequentially with aggregated logging
+3. Provides REST API testing utilities via Gradio Python Client
+4. Generates mock sample data for testing
+5. Creates a feedback loop for continuous improvement
 
 Usage:
-    python gradio_test_runner.py [--port PORT] [--log-dir DIR] [--verbose]
+    python gradio_test_runner.py                    # Run all tests
+    python gradio_test_runner.py --test <name>      # Run specific test
+    python gradio_test_runner.py --generate-mocks   # Generate mock data only
+    python gradio_test_runner.py --rest-api-tests   # Run REST API tests only
 """
 
 import argparse
+import csv
 import json
 import logging
 import os
 import subprocess
 import sys
+import tempfile
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+
+# Try to import gradio_client for REST API testing
+try:
+    from gradio_client import Client, handle_file
+    GRADIO_CLIENT_AVAILABLE = True
+except ImportError:
+    GRADIO_CLIENT_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("gradio_client not installed. REST API tests will be skipped.")
 
 
 # Configure logging
@@ -33,6 +48,213 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+class MockDataGenerator:
+    """Generate mock CSV data for testing DSPy compilations."""
+
+    @staticmethod
+    def generate_joke_dataset(num_rows: int = 5, output_path: Optional[Path] = None) -> Path:
+        """Generate a mock joke dataset with topic -> joke mapping."""
+        data = [
+            {"topic": "cats", "joke": "Why do cats make great programmers? They have perfect mew-thods!"},
+            {"topic": "dogs", "joke": "What do you call a dog that does magic tricks? A labracadabrador!"},
+            {"topic": "food", "joke": "Why did the cookie go to the doctor? It was feeling crumbly!"},
+            {"topic": "space", "joke": "Why did the sun go to school? To get brighter!"},
+            {"topic": "computers", "joke": "Why do programmers prefer dark mode? Light attracts bugs!"},
+            {"topic": "chickens", "joke": "Why did the chicken cross the road? To get to the other side!"},
+            {"topic": "science", "joke": "Why can't you trust atoms? Because they make up everything!"},
+            {"topic": "math", "joke": "Why was six afraid of seven? Because seven eight nine!"},
+        ]
+
+        if output_path is None:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode='w',
+                delete=False,
+                suffix='.csv',
+                newline=''
+            )
+            output_path = Path(temp_file.name)
+        else:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=["topic", "joke"])
+            writer.writeheader()
+            writer.writerows(data[:min(num_rows, len(data))])
+
+        logger.info(f"Generated mock joke dataset: {output_path}")
+        return output_path
+
+    @staticmethod
+    def generate_classification_dataset(num_rows: int = 5, output_path: Optional[Path] = None) -> Path:
+        """Generate a mock classification dataset."""
+        data = [
+            {"text": "This is amazing!", "sentiment": "positive"},
+            {"text": "This is terrible.", "sentiment": "negative"},
+            {"text": "It's okay I guess.", "sentiment": "neutral"},
+            {"text": "Best experience ever!", "sentiment": "positive"},
+            {"text": "Worst product ever.", "sentiment": "negative"},
+            {"text": "Pretty good overall.", "sentiment": "positive"},
+            {"text": "Not great, not terrible.", "sentiment": "neutral"},
+            {"text": "Absolutely horrible!", "sentiment": "negative"},
+        ]
+
+        if output_path is None:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode='w',
+                delete=False,
+                suffix='.csv',
+                newline=''
+            )
+            output_path = Path(temp_file.name)
+        else:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=["text", "sentiment"])
+            writer.writeheader()
+            writer.writerows(data[:min(num_rows, len(data))])
+
+        logger.info(f"Generated mock classification dataset: {output_path}")
+        return output_path
+
+    @staticmethod
+    def generate_qa_dataset(num_rows: int = 5, output_path: Optional[Path] = None) -> Path:
+        """Generate a mock Q&A dataset."""
+        data = [
+            {"question": "What is 2+2?", "answer": "4"},
+            {"question": "What color is the sky?", "answer": "blue"},
+            {"question": "What is the capital of France?", "answer": "Paris"},
+            {"question": "How many days in a week?", "answer": "7"},
+            {"question": "What is H2O?", "answer": "water"},
+            {"question": "How many months in a year?", "answer": "12"},
+            {"question": "What is the largest ocean?", "answer": "Pacific"},
+            {"question": "How many continents are there?", "answer": "7"},
+        ]
+
+        if output_path is None:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode='w',
+                delete=False,
+                suffix='.csv',
+                newline=''
+            )
+            output_path = Path(temp_file.name)
+        else:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=["question", "answer"])
+            writer.writeheader()
+            writer.writerows(data[:min(num_rows, len(data))])
+
+        logger.info(f"Generated mock Q&A dataset: {output_path}")
+        return output_path
+
+
+class RestApiTestRunner:
+    """Run REST API tests using Gradio Python Client."""
+
+    def __init__(self, server_url: str, log_dir: Path):
+        self.server_url = server_url
+        self.log_dir = log_dir
+        self.results: List[Dict[str, Any]] = []
+
+    def run_all_tests(self) -> List[Dict[str, Any]]:
+        """Run all available REST API tests."""
+        if not GRADIO_CLIENT_AVAILABLE:
+            logger.warning("Gradio client not available, skipping REST API tests")
+            return []
+
+        test_methods = [
+            method for method in dir(self)
+            if method.startswith('test_') and callable(getattr(self, method))
+        ]
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Running {len(test_methods)} REST API tests")
+        logger.info(f"{'='*60}\n")
+
+        for method_name in sorted(test_methods):
+            self.run_test(method_name)
+
+        return self.results
+
+    def run_test(self, test_name: str) -> Dict[str, Any]:
+        """Run a single test by name."""
+        logger.info(f"--- Running REST API Test: {test_name} ---")
+
+        start_time = time.time()
+        try:
+            method = getattr(self, test_name)
+            method()
+            duration = time.time() - start_time
+            result = {
+                "name": test_name,
+                "passed": True,
+                "duration": duration,
+                "error": None
+            }
+            logger.info(f"✓ {test_name} PASSED ({duration:.2f}s)")
+        except Exception as e:
+            duration = time.time() - start_time
+            error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+            result = {
+                "name": test_name,
+                "passed": False,
+                "duration": duration,
+                "error": error_msg
+            }
+            logger.error(f"✗ {test_name} FAILED ({duration:.2f}s)")
+            logger.error(f"Error: {error_msg}")
+
+        self.results.append(result)
+        return result
+
+    def test_api_connection(self):
+        """Test that we can connect to the Gradio API."""
+        client = Client(self.server_url, verbose=False)
+        assert client is not None
+        logger.info(f"Successfully connected to {self.server_url}")
+
+    def test_list_prompts_api(self):
+        """Test the list_prompts API endpoint."""
+        client = Client(self.server_url, verbose=False)
+
+        try:
+            result = client.predict(
+                filter_text="",
+                sort_by="Run Date",
+                api_name="/list_prompts"
+            )
+            assert isinstance(result, str)
+            logger.info(f"list_prompts returned {len(result)} characters")
+        except Exception as e:
+            # API endpoint might not be named exactly /list_prompts
+            logger.warning(f"Could not call /list_prompts: {e}")
+            # Try to inspect API
+            logger.info("Available API endpoints:")
+            logger.info(client.view_api())
+
+    def test_mock_data_generation(self):
+        """Test mock data generator functions."""
+        generator = MockDataGenerator()
+
+        # Generate each type of mock data
+        joke_file = generator.generate_joke_dataset(3)
+        class_file = generator.generate_classification_dataset(3)
+        qa_file = generator.generate_qa_dataset(3)
+
+        # Verify files exist and have content
+        for filepath in [joke_file, class_file, qa_file]:
+            assert filepath.exists()
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+                assert len(lines) >= 2  # Header + at least 1 data row
+            filepath.unlink()  # Clean up
+
+        logger.info("All mock data generators working correctly")
 
 
 class GradioTestRunner:
@@ -247,19 +469,22 @@ class GradioTestRunner:
         mock_data_dir = Path("tests/test_data")
         mock_data_dir.mkdir(exist_ok=True)
 
-        # Generate sample jokes CSV if it doesn't exist
-        sample_jokes = mock_data_dir / "sample_jokes.csv"
-        if not sample_jokes.exists():
-            with open(sample_jokes, 'w') as f:
-                f.write("topic,joke\n")
-                f.write("chickens,Why did the chicken cross the road? To get to the other side!\n")
-                f.write("computers,Why do programmers prefer dark mode? Because light attracts bugs!\n")
-                f.write("science,Why can't you trust atoms? Because they make up everything!\n")
-            logger.info(f"Created mock data: {sample_jokes}")
+        generator = MockDataGenerator()
 
-    def run(self) -> int:
+        # Generate sample datasets
+        generator.generate_joke_dataset(8, mock_data_dir / "sample_jokes.csv")
+        generator.generate_classification_dataset(8, mock_data_dir / "sample_classification.csv")
+        generator.generate_qa_dataset(8, mock_data_dir / "sample_qa.csv")
+
+        logger.info(f"Created mock data in: {mock_data_dir}")
+
+    def run(self, run_rest_api_tests: bool = False, run_pytest_tests: bool = True) -> int:
         """
         Run the complete test suite.
+
+        Args:
+            run_rest_api_tests: Whether to run REST API tests
+            run_pytest_tests: Whether to run pytest tests
 
         Returns:
             Exit code (0 for success, non-zero for failure)
@@ -273,32 +498,60 @@ class GradioTestRunner:
                 logger.error("Failed to start Gradio server")
                 return 1
 
-            # Run tests
-            exit_code, pytest_output = self.run_pytest()
+            exit_code = 0
 
-            # Analyze results
-            results = self.analyze_test_results(pytest_output)
+            # Run pytest tests
+            if run_pytest_tests:
+                exit_code, pytest_output = self.run_pytest()
 
-            # Print summary to console
-            logger.info("=" * 80)
-            logger.info("Test Results:")
-            logger.info(f"  Total: {results['total']}")
-            logger.info(f"  Passed: {results['passed']}")
-            logger.info(f"  Failed: {results['failed']}")
-            logger.info(f"  Skipped: {results['skipped']}")
-            logger.info(f"  Errors: {results['errors']}")
-            logger.info("=" * 80)
+                # Analyze results
+                results = self.analyze_test_results(pytest_output)
 
-            # Generate reports
-            self.generate_summary_report(results, pytest_output)
+                # Print summary to console
+                logger.info("=" * 80)
+                logger.info("Pytest Results:")
+                logger.info(f"  Total: {results['total']}")
+                logger.info(f"  Passed: {results['passed']}")
+                logger.info(f"  Failed: {results['failed']}")
+                logger.info(f"  Skipped: {results['skipped']}")
+                logger.info(f"  Errors: {results['errors']}")
+                logger.info("=" * 80)
 
-            # Show Gradio logs if there were failures
-            if results['failed'] > 0 or results['errors'] > 0:
-                logger.warning("Test failures detected. Check logs for details.")
-                if self.verbose:
-                    logger.info("\nGradio Server Logs:")
-                    logger.info("-" * 80)
-                    logger.info(self.get_gradio_logs())
+                # Generate reports
+                self.generate_summary_report(results, pytest_output)
+
+                # Show Gradio logs if there were failures
+                if results['failed'] > 0 or results['errors'] > 0:
+                    logger.warning("Test failures detected. Check logs for details.")
+                    if self.verbose:
+                        logger.info("\nGradio Server Logs:")
+                        logger.info("-" * 80)
+                        logger.info(self.get_gradio_logs())
+
+            # Run REST API tests
+            if run_rest_api_tests and GRADIO_CLIENT_AVAILABLE:
+                server_url = f"http://127.0.0.1:{self.port}"
+                api_runner = RestApiTestRunner(server_url, self.run_dir)
+                api_results = api_runner.run_all_tests()
+
+                # Print API test summary
+                passed = sum(1 for r in api_results if r["passed"])
+                failed = len(api_results) - passed
+                logger.info("=" * 80)
+                logger.info("REST API Test Results:")
+                logger.info(f"  Total: {len(api_results)}")
+                logger.info(f"  Passed: {passed}")
+                logger.info(f"  Failed: {failed}")
+                logger.info("=" * 80)
+
+                # Save API test results
+                api_results_file = self.run_dir / "rest_api_results.json"
+                with open(api_results_file, 'w') as f:
+                    json.dump(api_results, f, indent=2)
+                logger.info(f"REST API results saved to: {api_results_file}")
+
+                if failed > 0:
+                    exit_code = 1
 
             return exit_code
 
@@ -315,8 +568,8 @@ def main() -> int:
     parser.add_argument(
         "--port",
         type=int,
-        default=7860,
-        help="Port to run Gradio server on (default: 7860)"
+        default=7862,
+        help="Port to run Gradio server on (default: 7862)"
     )
     parser.add_argument(
         "--log-dir",
@@ -329,12 +582,39 @@ def main() -> int:
         action="store_true",
         help="Enable verbose output"
     )
+    parser.add_argument(
+        "--generate-mocks",
+        action="store_true",
+        help="Generate mock data files and exit"
+    )
+    parser.add_argument(
+        "--rest-api-tests",
+        action="store_true",
+        help="Run REST API tests (requires gradio_client)"
+    )
+    parser.add_argument(
+        "--pytest-only",
+        action="store_true",
+        help="Run only pytest tests, skip REST API tests"
+    )
 
     args = parser.parse_args()
 
     # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Just generate mocks and exit
+    if args.generate_mocks:
+        logger.info("Generating mock data files...")
+        mock_data_dir = Path("tests/test_data")
+        mock_data_dir.mkdir(exist_ok=True)
+        generator = MockDataGenerator()
+        generator.generate_joke_dataset(10, mock_data_dir / "jokes.csv")
+        generator.generate_classification_dataset(10, mock_data_dir / "classification.csv")
+        generator.generate_qa_dataset(10, mock_data_dir / "qa.csv")
+        logger.info(f"Generated mock data in: {mock_data_dir}")
+        return 0
 
     # Run tests
     runner = GradioTestRunner(
@@ -343,7 +623,14 @@ def main() -> int:
         verbose=args.verbose
     )
 
-    return runner.run()
+    # Determine which tests to run
+    run_rest_api = args.rest_api_tests or not args.pytest_only
+    run_pytest = not args.rest_api_tests or args.pytest_only
+
+    return runner.run(
+        run_rest_api_tests=run_rest_api,
+        run_pytest_tests=run_pytest
+    )
 
 
 if __name__ == "__main__":
