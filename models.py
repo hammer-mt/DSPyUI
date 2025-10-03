@@ -250,6 +250,59 @@ class GenerationResult(BaseModel):
     model_config = ConfigDict(frozen=False)
 
 
+class CostEstimate(BaseModel):
+    """Cost estimation for DSPy program compilation."""
+
+    estimated_cost_usd: float = Field(..., description="Estimated cost in USD")
+    teacher_calls: int = Field(..., description="Estimated teacher model API calls")
+    student_calls: int = Field(..., description="Estimated student model API calls")
+    estimated_input_tokens: int = Field(..., description="Estimated input tokens")
+    estimated_output_tokens: int = Field(..., description="Estimated output tokens")
+    student_model: str
+    teacher_model: str
+    optimizer: str
+    dataset_size: int
+
+    # Warning flags
+    is_expensive: bool = Field(default=False, description="Cost > $1.00")
+    is_very_expensive: bool = Field(default=False, description="Cost > $5.00")
+
+    # Cost breakdown
+    breakdown: Dict[str, float] = Field(default_factory=dict, description="Detailed cost breakdown")
+
+    model_config = ConfigDict(frozen=False)
+
+    def get_warning_message(self) -> Optional[str]:
+        """Get a warning message if the cost is high."""
+        if self.is_very_expensive:
+            return f"⚠️ WARNING: This compilation will cost approximately ${self.estimated_cost_usd:.2f}. This is expensive!"
+        elif self.is_expensive:
+            return f"⚠️ Note: This compilation will cost approximately ${self.estimated_cost_usd:.2f}."
+        return None
+
+    def format_summary(self) -> str:
+        """Format a human-readable cost summary."""
+        lines = [
+            f"💰 Cost Estimate: ${self.estimated_cost_usd:.4f} USD",
+            f"📊 Dataset Size: {self.dataset_size} examples",
+            f"🤖 Models: {self.teacher_model} (teacher), {self.student_model} (student)",
+            f"🔧 Optimizer: {self.optimizer}",
+            f"📞 Estimated API Calls: {self.teacher_calls + self.student_calls}",
+            f"📝 Estimated Tokens: {self.estimated_input_tokens:,} input, {self.estimated_output_tokens:,} output"
+        ]
+
+        if self.breakdown:
+            lines.append("\n📋 Cost Breakdown:")
+            for key, value in self.breakdown.items():
+                lines.append(f"  • {key}: ${value:.4f}")
+
+        warning = self.get_warning_message()
+        if warning:
+            lines.insert(0, warning)
+
+        return "\n".join(lines)
+
+
 # Supported model lists
 SUPPORTED_OPENAI_MODELS = [
     "gpt-4o",
