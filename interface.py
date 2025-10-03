@@ -239,6 +239,17 @@ with gr.Blocks(css=custom_css) as demo:
                         inputs=[metric_type] + inputs + outputs,
                         outputs=[judge_prompt]
                     )
+
+                    # Function to show/hide k parameter for LabeledFewShot optimizer
+                    def update_optimizer_params_visibility(optimizer_value):
+                        return gr.update(visible=optimizer_value == "LabeledFewShot")
+
+                    optimizer.change(
+                        update_optimizer_params_visibility,
+                        inputs=[optimizer],
+                        outputs=[k_fewshot]
+                    )
+
                     random_row_button.click(
                         select_random_row,
                         inputs=[row_choice_options],
@@ -270,6 +281,7 @@ with gr.Blocks(css=custom_css) as demo:
 
                         hint = data[hint_textbox] if data[dspy_module] == "ChainOfThoughtWithHint" else None
                         max_iters_value = int(data[max_iters]) if data[dspy_module] == "ProgramOfThought" else 3
+                        k_value = int(data[k_fewshot]) if data[optimizer] == "LabeledFewShot" else 16
 
                         # Get base URLs for local LLMs
                         student_base_url = data.get(llm_base_url) if data[llm_model].startswith("local:") else None
@@ -290,6 +302,7 @@ with gr.Blocks(css=custom_css) as demo:
                             output_descs,
                             hint,  # Add the hint parameter
                             max_iters_value,  # Add the max_iters parameter
+                            k_value,  # Add the k parameter for LabeledFewShot
                             student_base_url,  # Add base URL for student model
                             teacher_base  # Add base URL for teacher model
                         )
@@ -340,7 +353,8 @@ with gr.Blocks(css=custom_css) as demo:
                             "metric_type": data[metric_type],
                             "judge_prompt_id": judge_prompt_id,
                             "hint": hint,
-                            "max_iters": max_iters_value
+                            "max_iters": max_iters_value,
+                            "k_fewshot": k_value
                         }
 
                         row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
@@ -421,7 +435,7 @@ with gr.Blocks(css=custom_css) as demo:
                 
                 compile_button.click(
                     compile,
-                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, max_iters, llm_base_url, teacher_base_url]),
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, max_iters, k_fewshot, llm_base_url, teacher_base_url]),
                     outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score]
                 )
 
@@ -555,13 +569,24 @@ with gr.Blocks(css=custom_css) as demo:
                     )
 
             with gr.Row():
-                optimizer = gr.Dropdown(
-                    ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPROv2", "COPRO"],
-                    label="Optimizer",
-                    value="BootstrapFewShot",
-                    info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPROv2 and COPRO (large, 300+) also optimize the prompt instructions.",
-                    interactive=True
-                )
+                with gr.Column():
+                    optimizer = gr.Dropdown(
+                        ["BootstrapFewShot", "BootstrapFewShotWithRandomSearch", "MIPROv2", "COPRO", "LabeledFewShot"],
+                        label="Optimizer",
+                        value="BootstrapFewShot",
+                        info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning; BootstrapFewShotWithRandomSearch (medium, ~50) adds randomized search; MIPROv2 and COPRO (large, 300+) also optimize the prompt instructions; LabeledFewShot (any size) uses simple labeled examples without optimization.",
+                        interactive=True
+                    )
+                    k_fewshot = gr.Slider(
+                        minimum=1,
+                        maximum=50,
+                        value=16,
+                        step=1,
+                        label="Number of Examples (k)",
+                        info="Number of labeled examples to use for LabeledFewShot optimizer.",
+                        visible=False,
+                        interactive=True
+                    )
                 with gr.Column():
                     metric_type = gr.Radio(
                         ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
@@ -742,6 +767,10 @@ with gr.Blocks(css=custom_css) as demo:
                         visible=details['dspy_module'] == "ProgramOfThought"
                     ),  # max_iters (value and visibility)
                     gr.update(
+                        value=details.get('k_fewshot', 16),
+                        visible=details['optimizer'] == "LabeledFewShot"
+                    ),  # k_fewshot (value and visibility)
+                    gr.update(
                         value=f"✅ **Loaded prompt:** {details['human_readable_id']}\n\nAll settings have been populated. You can now modify them or re-compile the program.",
                         visible=True
                     )  # loaded_prompt_info
@@ -816,7 +845,7 @@ with gr.Blocks(css=custom_css) as demo:
                 outputs=[
                     instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module,
                     input_values, output_values, file_data,
-                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox, max_iters,
+                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox, max_iters, k_fewshot,
                     loaded_prompt_info
                 ]
             )
