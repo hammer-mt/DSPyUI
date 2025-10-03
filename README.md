@@ -157,8 +157,11 @@ DSPyUI automatically saves compiled programs in two formats:
 - **Version controlled** - includes DSPy and DSPyUI version info
 - **Future-proof** - foundation for workflow chaining and other advanced features
 
-### Export Existing Programs
-Click the "💾 Export .dspyui" button in the View Prompts tab to convert any existing program to the consolidated format. Files are saved to `consolidated_programs/`.
+### Export & Import Programs
+
+**Export**: Click the "💾 Export .dspyui" button in the View Prompts tab to convert any existing program to the consolidated format. Files are saved to `consolidated_programs/`.
+
+**Import**: Upload a `.dspyui` file using the "📥 Import .dspyui File" section in the View Prompts tab. The file will be automatically extracted and saved to your local directories, making it available for viewing and execution.
 
 ## 🔗 Chain Building (Agentic Workflows)
 
