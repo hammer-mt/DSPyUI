@@ -40,7 +40,7 @@ gradio interface.py
 - Support for multiple LLM providers (OpenAI, Anthropic, Groq, Google)
 - **Local LLM support** (LM Studio, Ollama, llama.cpp)
 - Built-in DSPy modules (Predict, ChainOfThought, ChainOfThoughtWithHint, **ProgramOfThought**)
-- Built-in optimizers (BootstrapFewShot, MIPRO, COPRO, **LabeledFewShot**, and more)
+- Built-in optimizers (BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, **LabeledFewShot**)
 - Evaluation metrics (Exact Match, Cosine Similarity, LLM-as-a-Judge)
 - **Evaluation in generate interface** - see scores when testing predictions
 - Example datasets and pre-compiled programs
@@ -49,9 +49,12 @@ gradio interface.py
 
 ## Technology Stack
 
-- **UI Framework**: Gradio 5.x
-- **DSPy Version**: 3.0.4b1 (vendored in `./dspy/`)
+- **UI Framework**: Gradio 5.48.0
+- **DSPy Version**: 3.0.3 (pip-installed)
 - **Python**: 3.10+
+- **Type Safety**: mypy with comprehensive type hints
+- **Data Validation**: Pydantic models for configuration
+- **Testing**: Playwright for end-to-end tests, pytest for unit tests
 
 ## Supported Modules
 
@@ -66,7 +69,26 @@ gradio interface.py
 - **BootstrapFewShotWithRandomSearch** - Few-shot with random search for medium datasets (~50 examples)
 - **MIPROv2** - Instruction optimization for large datasets (300+ examples)
 - **COPRO** - Prompt optimization for large datasets (300+ examples)
+- **BootstrapFinetune** - Distill prompts into fine-tuned model weights
 - **LabeledFewShot** - Simple labeled examples without optimization (any dataset size)
+
+## Evaluation Features
+
+DSPyUI provides comprehensive evaluation capabilities:
+
+### During Compilation
+- Choose from three evaluation metrics:
+  - **Exact Match**: Compare outputs for exact equality
+  - **Cosine Similarity**: Semantic similarity using embeddings
+  - **LLM-as-a-Judge**: Use a separate DSPy program as an evaluator
+- Automatic train/dev split (80/20) for validation
+- Baseline and optimized scores displayed
+
+### During Generation
+- When testing individual predictions, evaluation scores are automatically displayed
+- Works with the same metrics as compilation
+- Requires gold/expected output data to be present
+- Helpful for debugging and quality assurance
 
 ## Local LLM Support
 
@@ -80,6 +102,30 @@ To use:
 - In the model dropdown, select a model name starting with `local:`
 - Enter your local server's base URL (or use the default for LM Studio)
 - Compile and run as normal - data stays completely private!
+
+## Code Quality & Testing
+
+DSPyUI maintains high code quality standards:
+
+### Type Safety
+- Comprehensive type hints on all core functions
+- mypy configuration for static type checking
+- Pydantic models for runtime data validation
+- Clear function signatures for better IDE support
+
+### Testing Infrastructure
+- Automated Gradio test runner (`gradio_test_runner.py`)
+- Playwright end-to-end tests (15/20 passing)
+- Mock data generation for testing
+- Comprehensive logging and error tracking
+
+Run tests:
+```bash
+source dspyui_env/bin/activate
+pytest tests/ -v                    # Run Playwright tests
+python gradio_test_runner.py       # Run with Gradio server
+mypy models.py                     # Type checking
+```
 
 <img width="1561" alt="Screenshot 2025-05-23 at 09 53 48" src="https://github.com/user-attachments/assets/df95d7ee-c605-47cc-a389-19cdd67f7a02" />
 <img width="1561" alt="Screenshot 2025-05-23 at 09 54 33" src="https://github.com/user-attachments/assets/e3cea6f3-68eb-4c48-bb6d-c5ef01eba827" />
