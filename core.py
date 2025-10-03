@@ -9,7 +9,7 @@ from openai import OpenAI
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, MIPROv2, COPRO, BootstrapFinetune
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune
 from pydantic import create_model
 
 # List of supported Groq models
@@ -339,15 +339,6 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     elif optimizer == "COPRO":
         teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
         compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
-    elif optimizer == "MIPRO":
-        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
-        num_trials = 10  # Adjust this value as needed
-        max_bootstrapped_demos = 5  # Adjust this value as needed
-        max_labeled_demos = 5  # Adjust this value as needed
-        compiled_program = teleprompter.compile(module, trainset=trainset, num_trials=num_trials,
-            max_bootstrapped_demos=max_bootstrapped_demos,
-            max_labeled_demos=max_labeled_demos,
-            eval_kwargs=kwargs, requires_permission_to_run=False)
     elif optimizer == "MIPROv2":
         teleprompter = MIPROv2(metric=metric, prompt_model=lm, task_model=teacher_lm, num_candidates=10, init_temperature=1.0)
 
