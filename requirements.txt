@@ -1,0 +1,21 @@
+# DSPyUI Dependencies
+# Python 3.10+ required (DSPy 3.0 requirement)
+
+# Core UI Framework
+gradio>=5.0.0
+
+# Data Processing
+pandas>=2.0.0
+
+# LLM API Clients
+openai>=1.0.0
+anthropic>=0.40.0
+groq>=0.12.0
+google-generativeai>=0.8.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+
+# Note: DSPy is vendored in the ./dspy/ directory (version 3.0.4b1)
+# If you prefer to use pip installation instead, uncomment the line below:
+# dspy-ai>=3.0.0
