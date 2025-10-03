@@ -51,11 +51,14 @@ with gr.Blocks(css=custom_css) as demo:
 
                 with gr.Column():
                     gr.Markdown("### Demo Examples:")
-                    with gr.Row():  
+                    with gr.Row():
                         example1 = gr.Button("Judging Jokes")
                         example2 = gr.Button("Telling Jokes")
                         example3 = gr.Button("Rewriting Jokes")
-            
+
+            # Info message for loaded prompts
+            loaded_prompt_info = gr.Markdown("", visible=False)
+
             # Task Instructions
             with gr.Row():
                 with gr.Column(scale=4):
@@ -70,6 +73,7 @@ with gr.Blocks(css=custom_css) as demo:
             input_values = gr.State([])
             output_values = gr.State([])
             file_data = gr.State(None)
+            load_prompt_data = gr.State(None)  # State to track prompt data to load into compiler
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("### Inputs")
@@ -578,7 +582,70 @@ with gr.Blocks(css=custom_css) as demo:
             # Connect the visibility update function to the module dropdown
             dspy_module.change(update_hint_visibility, inputs=[dspy_module], outputs=[hint_textbox])
 
-            
+
+            def load_prompt_into_compiler(prompt_data):
+                """
+                Load a saved prompt's configuration into the compiler interface.
+                Takes prompt data from View Prompts and populates all fields.
+                """
+                if prompt_data is None:
+                    return {}
+
+                details = json.loads(prompt_data["Details"])
+
+                # Convert input/output fields to (name, description) tuples
+                input_vals = list(zip(
+                    details['input_fields'],
+                    details.get('input_descriptions', [''] * len(details['input_fields']))
+                ))
+                output_vals = list(zip(
+                    details['output_fields'],
+                    details.get('output_descriptions', [''] * len(details['output_fields']))
+                ))
+
+                # Try to load the dataset
+                dataset_path = f"datasets/{details['human_readable_id']}.csv"
+                example_data_path = f"example_data/{details['human_readable_id']}.csv"
+                loaded_dataset = None
+
+                if os.path.exists(dataset_path):
+                    loaded_dataset = pd.read_csv(dataset_path)
+                elif os.path.exists(example_data_path):
+                    loaded_dataset = pd.read_csv(example_data_path)
+
+                # Prepare judge_prompt value - format to match dropdown display
+                judge_prompt_value = None
+                if details.get('judge_prompt_id'):
+                    judge_data = details.get('judge_prompt_id')
+                    # Format similar to how it's displayed in the dropdown
+                    judge_prompt_value = judge_data
+
+                # Return updates for all components
+                # Note: example_data and compile_button are inside @gr.render, so they'll update automatically
+                # when input_values, output_values, and file_data change
+                return (
+                    details['instructions'],  # instructions
+                    details['optimizer'],  # optimizer
+                    details.get('metric_type', 'Exact Match'),  # metric_type
+                    details['llm_model'],  # llm_model
+                    details['teacher_model'],  # teacher_model
+                    details['dspy_module'],  # dspy_module
+                    input_vals,  # input_values
+                    output_vals,  # output_values
+                    loaded_dataset,  # file_data (this will trigger re-render with the dataset visible)
+                    gr.update(interactive=len(input_vals) > 0),  # remove_input_btn
+                    gr.update(interactive=len(output_vals) > 0),  # remove_output_btn
+                    judge_prompt_value,  # judge_prompt
+                    gr.update(
+                        value=details.get('hint', ''),
+                        visible=details['dspy_module'] == "ChainOfThoughtWithHint"
+                    ),  # hint_textbox (value and visibility)
+                    gr.update(
+                        value=f"✅ **Loaded prompt:** {details['human_readable_id']}\n\nAll settings have been populated. You can now modify them or re-compile the program.",
+                        visible=True
+                    )  # loaded_prompt_info
+                )
+
             def disable_example_buttons():
                 return gr.update(interactive=False), gr.update(interactive=False), gr.update(interactive=False)
 
@@ -641,7 +708,17 @@ with gr.Blocks(css=custom_css) as demo:
                 outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button]
             )
 
-            
+            # Watcher to auto-load when a prompt is selected from View Prompts tab
+            load_prompt_data.change(
+                load_prompt_into_compiler,
+                inputs=[load_prompt_data],
+                outputs=[
+                    instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module,
+                    input_values, output_values, file_data,
+                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox,
+                    loaded_prompt_info
+                ]
+            )
 
         with gr.TabItem("View Prompts"):
             
@@ -662,7 +739,16 @@ with gr.Blocks(css=custom_css) as demo:
                     with gr.Row():
                         with gr.Column():
                             details = json.loads(selected_prompt["Details"])
-                            gr.Markdown(f"## {details['human_readable_id']}")
+                            with gr.Row():
+                                gr.Markdown(f"## {details['human_readable_id']}")
+                                load_into_compiler_btn = gr.Button("📋 Load into Compiler", size="sm", variant="primary")
+
+                            # Wire up the load button to update load_prompt_data State
+                            load_into_compiler_btn.click(
+                                lambda: selected_prompt,
+                                outputs=[load_prompt_data]
+                            )
+
                             with gr.Group():
                                 with gr.Column(elem_classes="prompt-details-full"):
                                     gr.Number(value=float(selected_prompt['Eval Score']), label="Evaluation Score", interactive=False)
