@@ -171,3 +171,7 @@ programs/
 notes/
 *.ipynb
 datasets/
+prompt.md
+dspy/
+CLAUDE.md
+dspy-docs.md
