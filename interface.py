@@ -1308,5 +1308,148 @@ with gr.Blocks(css=custom_css) as demo:
                         outputs=[selected_prompt, close_details_btn]
                     )
 
+        with gr.TabItem("Settings"):
+            gr.Markdown("# API Key Configuration")
+            gr.Markdown("""
+            Configure your API keys for different LLM providers. These keys are stored in your session only and never saved to disk.
+
+            ⚠️ **Security Note:** Your API keys are only stored for the duration of your session and are not persisted.
+            """)
+
+            # API Keys state
+            api_keys_state = gr.State({
+                "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+                "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", ""),
+                "GROQ_API_KEY": os.environ.get("GROQ_API_KEY", ""),
+                "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY", "")
+            })
+
+            # Helper function for API status
+            def _get_api_status_static(keys_dict):
+                """Get formatted status of API keys."""
+                status = ""
+                providers = {
+                    "OPENAI_API_KEY": "OpenAI (GPT models)",
+                    "ANTHROPIC_API_KEY": "Anthropic (Claude models)",
+                    "GROQ_API_KEY": "Groq",
+                    "GOOGLE_API_KEY": "Google (Gemini models)"
+                }
+
+                for key, name in providers.items():
+                    has_key = bool(keys_dict.get(key))
+                    icon = "✅" if has_key else "❌"
+                    status += f"{icon} **{name}**: {'Configured' if has_key else 'Not configured'}\n"
+
+                if not any(keys_dict.values()):
+                    status += "\n⚠️ **No API keys configured.** You won't be able to use cloud LLM providers.\n"
+                    status += "💡 **Tip:** You can still use local LLMs (LM Studio, Ollama) without API keys."
+
+                return status
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Provider API Keys")
+
+                    openai_key = gr.Textbox(
+                        label="OpenAI API Key",
+                        type="password",
+                        placeholder="sk-...",
+                        value=os.environ.get("OPENAI_API_KEY", ""),
+                        info="Required for GPT models"
+                    )
+
+                    anthropic_key = gr.Textbox(
+                        label="Anthropic API Key",
+                        type="password",
+                        placeholder="sk-ant-...",
+                        value=os.environ.get("ANTHROPIC_API_KEY", ""),
+                        info="Required for Claude models"
+                    )
+
+                    groq_key = gr.Textbox(
+                        label="Groq API Key",
+                        type="password",
+                        placeholder="gsk_...",
+                        value=os.environ.get("GROQ_API_KEY", ""),
+                        info="Required for Groq models"
+                    )
+
+                    google_key = gr.Textbox(
+                        label="Google API Key",
+                        type="password",
+                        placeholder="AI...",
+                        value=os.environ.get("GOOGLE_API_KEY", ""),
+                        info="Required for Gemini models"
+                    )
+
+                with gr.Column():
+                    gr.Markdown("### Status")
+                    api_status = gr.Markdown(_get_api_status_static(os.environ))
+
+            with gr.Row():
+                save_keys_btn = gr.Button("💾 Save API Keys", variant="primary")
+                clear_keys_btn = gr.Button("🗑️ Clear All Keys", variant="secondary")
+
+            save_status = gr.Markdown(visible=False)
+
+            def update_api_keys(openai, anthropic, groq, google):
+                """Update API keys in session state."""
+                keys = {
+                    "OPENAI_API_KEY": openai if openai else "",
+                    "ANTHROPIC_API_KEY": anthropic if anthropic else "",
+                    "GROQ_API_KEY": groq if groq else "",
+                    "GOOGLE_API_KEY": google if google else ""
+                }
+
+                # Update os.environ for backward compatibility
+                for key, value in keys.items():
+                    if value:
+                        os.environ[key] = value
+                    elif key in os.environ:
+                        del os.environ[key]
+
+                status_msg = "✅ API keys saved successfully!\n\n"
+                status_msg += _get_api_status_static(keys)
+
+                return keys, gr.update(visible=True, value=status_msg), gr.update(value=status_msg)
+
+            def clear_all_keys():
+                """Clear all API keys."""
+                keys = {
+                    "OPENAI_API_KEY": "",
+                    "ANTHROPIC_API_KEY": "",
+                    "GROQ_API_KEY": "",
+                    "GOOGLE_API_KEY": ""
+                }
+
+                # Clear from os.environ
+                for key in keys:
+                    if key in os.environ:
+                        del os.environ[key]
+
+                status_msg = "🗑️ All API keys cleared.\n\n"
+                status_msg += _get_api_status_static(keys)
+
+                return (
+                    keys,
+                    gr.update(value=""),
+                    gr.update(value=""),
+                    gr.update(value=""),
+                    gr.update(value=""),
+                    gr.update(visible=True, value=status_msg),
+                    gr.update(value=status_msg)
+                )
+
+            save_keys_btn.click(
+                update_api_keys,
+                inputs=[openai_key, anthropic_key, groq_key, google_key],
+                outputs=[api_keys_state, save_status, api_status]
+            )
+
+            clear_keys_btn.click(
+                clear_all_keys,
+                outputs=[api_keys_state, openai_key, anthropic_key, groq_key, google_key, save_status, api_status]
+            )
+
 if __name__ == "__main__":
     demo.launch()
