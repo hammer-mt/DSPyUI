@@ -43,6 +43,7 @@ gradio interface.py
 - Built-in optimizers (BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, **LabeledFewShot**)
 - Evaluation metrics (Exact Match, Cosine Similarity, LLM-as-a-Judge)
 - **Evaluation in generate interface** - see scores when testing predictions
+- **Consolidated .dspyui file format** - all program data in a single file
 - Example datasets and pre-compiled programs
 - Export and reuse compiled programs
 - Load existing prompts back into the compiler
@@ -102,6 +103,21 @@ To use:
 - In the model dropdown, select a model name starting with `local:`
 - Enter your local server's base URL (or use the default for LM Studio)
 - Compile and run as normal - data stays completely private!
+
+## Consolidated File Format (.dspyui)
+
+DSPyUI automatically saves compiled programs in two formats:
+1. **Legacy format**: Three separate files (dataset.csv, program.json, prompt.json)
+2. **Consolidated format**: Single `.dspyui` file containing all program data
+
+### Benefits of .dspyui Format
+- **Single file** for easy sharing and backup
+- **Complete program package** - includes configuration, compiled program, and training data
+- **Version controlled** - includes DSPy and DSPyUI version info
+- **Future-proof** - foundation for workflow chaining and other advanced features
+
+### Export Existing Programs
+Click the "💾 Export .dspyui" button in the View Prompts tab to convert any existing program to the consolidated format. Files are saved to `consolidated_programs/`.
 
 ## Code Quality & Testing
 
