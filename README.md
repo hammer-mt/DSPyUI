@@ -37,6 +37,7 @@ gradio interface.py
 ## Features
 
 - Visual interface for DSPy program compilation
+- **🔗 Chain Builder** - create multi-step DSPy programs by chaining modules together
 - Support for multiple LLM providers (OpenAI, Anthropic, Groq, Google)
 - **Local LLM support** (LM Studio, Ollama, llama.cpp)
 - Built-in DSPy modules (Predict, ChainOfThought, ChainOfThoughtWithHint, **ProgramOfThought**)
@@ -147,6 +148,63 @@ DSPyUI automatically saves compiled programs in two formats:
 
 ### Export Existing Programs
 Click the "💾 Export .dspyui" button in the View Prompts tab to convert any existing program to the consolidated format. Files are saved to `consolidated_programs/`.
+
+## 🔗 Chain Building (Agentic Workflows)
+
+The Chain Builder allows you to create multi-step DSPy programs where the output from one module becomes input to the next. This enables complex, agentic workflows similar to ComfyUI or N8N.
+
+### Use Cases
+
+- **Multi-stage analysis**: Extract entities → Classify sentiment → Generate summary
+- **Research pipelines**: Generate query → Search docs → Synthesize answer
+- **Data transformation**: Parse input → Validate → Transform → Format output
+- **Reasoning chains**: Generate hypotheses → Test each → Select best
+
+### How to Build a Chain
+
+1. **Navigate to Build Chain tab**
+2. **Configure chain basics**:
+   - Name your chain
+   - Add description
+   - Define initial inputs (fields provided to the chain)
+   - Define final outputs (fields to evaluate)
+
+3. **Add steps sequentially**:
+   - Select module type (Predict, ChainOfThought, etc.)
+   - Define signature: `input_fields -> output_fields`
+   - Add instructions (optional)
+   - **Map inputs**: Specify where each input comes from (chain inputs or previous step outputs)
+
+4. **Upload training data**: CSV with all fields needed across the chain
+
+5. **Configure and compile**:
+   - Select model, optimizer, and evaluation metric
+   - Click "🔨 Compile Chain"
+   - View results including cost and evaluation score
+
+### Example Chain
+
+**Task**: Analyze text and generate a summary with keywords
+
+**Step 1**: Extract Keywords
+- Module: `ChainOfThought`
+- Signature: `text -> keywords`
+- Input Mapping: `{"text": "text"}`
+
+**Step 2**: Generate Summary
+- Module: `ChainOfThought`
+- Signature: `text, keywords -> summary`
+- Input Mapping: `{"text": "text", "keywords": "keywords"}`
+
+### Technical Details
+
+- Chains are saved as `.json` files in the `chains/` directory
+- Also exported to consolidated `.dspyui` format
+- Each step is a DSPy module that can access:
+  - Initial chain inputs
+  - Outputs from all previous steps
+- DSPy optimizers train the entire chain end-to-end
+- Cost tracking included for full chain compilation
 
 ## Code Quality & Testing
 
