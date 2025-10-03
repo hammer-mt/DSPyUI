@@ -287,7 +287,7 @@ with gr.Blocks(css=custom_css) as demo:
                         student_base_url = data.get(llm_base_url) if data[llm_model].startswith("local:") else None
                         teacher_base = data.get(teacher_base_url) if data[teacher_model].startswith("local:") else None
 
-                        usage_instructions, optimized_prompt = compile_program(
+                        usage_instructions, optimized_prompt, cost_data = compile_program(
                             input_fields,
                             output_fields,
                             data[dspy_module],
@@ -354,7 +354,12 @@ with gr.Blocks(css=custom_css) as demo:
                             "judge_prompt_id": judge_prompt_id,
                             "hint": hint,
                             "max_iters": max_iters_value,
-                            "k_fewshot": k_value
+                            "k_fewshot": k_value,
+                            # Cost tracking fields
+                            "actual_cost": cost_data.get("actual_cost_usd"),
+                            "input_tokens": cost_data.get("input_tokens"),
+                            "output_tokens": cost_data.get("output_tokens"),
+                            "total_tokens": cost_data.get("total_tokens")
                         }
 
                         row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
