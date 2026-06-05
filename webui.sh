@@ -42,10 +42,11 @@ else
     echo "No .env file found. Make sure to set any necessary environment variables manually."
 fi
 
-# Install required packages if not already installed
-if ! pip freeze | grep -q "gradio\|dspy\|pandas\|openai\|anthropic\|groq\|sklearn|google-generativeai"; then
+# Install required packages if not already installed (the 'dspy-ai' package was renamed to 'dspy' in 3.x)
+if ! pip freeze | grep -q "^dspy==3"; then
     echo "Installing required packages..."
-    pip install gradio dspy-ai pandas openai anthropic groq scikit-learn google-generativeai
+    pip uninstall -y dspy-ai 2>/dev/null || true
+    pip install gradio "dspy>=3.2.1" pandas openai anthropic groq scikit-learn google-generativeai
 else
     echo "Required packages are already installed."
 fi
