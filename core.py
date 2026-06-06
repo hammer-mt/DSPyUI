@@ -9,8 +9,7 @@ from openai import OpenAI
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPRO, MIPROv2, COPRO, BootstrapFinetune
-from pydantic import create_model
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, GEPA, BootstrapFinetune
 
 # List of supported Groq models
 SUPPORTED_GROQ_MODELS = [
@@ -35,26 +34,18 @@ def create_custom_signature(input_fields: List[str], output_fields: List[str], i
     fields = {}
     for i, field in enumerate(input_fields):
         if i < len(input_descs) and input_descs[i]:
-            fields[field] = (str, dspy.InputField(default=..., desc=input_descs[i], json_schema_extra={"__dspy_field_type": "input"}))
+            fields[field] = (str, dspy.InputField(desc=input_descs[i]))
         else:
-            fields[field] = (str, dspy.InputField(default=..., json_schema_extra={"__dspy_field_type": "input"}))
-    
+            fields[field] = (str, dspy.InputField())
+
     for i, field in enumerate(output_fields):
         if i < len(output_descs) and output_descs[i]:
-            fields[field] = (str, dspy.OutputField(default=..., desc=output_descs[i], json_schema_extra={"__dspy_field_type": "output"}))
+            fields[field] = (str, dspy.OutputField(desc=output_descs[i]))
         else:
-            fields[field] = (str, dspy.OutputField(default=..., json_schema_extra={"__dspy_field_type": "output"}))
-    
-    CustomSignatureModel = create_model('CustomSignatureModel', **fields)
-    
-    class CustomSignature(dspy.Signature, CustomSignatureModel):
-        """
-        {instructions}
-        """
-    
-    CustomSignature.__doc__ = CustomSignature.__doc__.format(instructions=instructions)
-    
-    return CustomSignature
+            fields[field] = (str, dspy.OutputField())
+
+    # DSPy supports building signatures directly from a field dict
+    return dspy.Signature(fields, instructions)
 
 def generate_human_readable_id(input_fields: List[str], output_fields: List[str], dspy_module: str, llm_model: str, teacher_model: str, optimizer: str, instructions: str) -> str:
     # Create a signature-based name
@@ -100,9 +91,12 @@ def create_dspy_module(dspy_module: str, CustomSignature: type, hint: str = None
         class CustomChainOfThoughtWithHintModule(dspy.Module):
             def __init__(self):
                 super().__init__()
-                self.cot_with_hint = dspy.ChainOfThought(CustomSignature)
+                # dspy.ChainOfThoughtWithHint was removed in DSPy 3.x, and extra kwargs not in the
+                # signature are now ignored, so add the hint to the signature as an input field
+                signature_with_hint = CustomSignature.append("hint", dspy.InputField(desc="A hint to guide the reasoning"), str)
+                self.cot_with_hint = dspy.ChainOfThought(signature_with_hint)
                 self.hint = hint
-            
+
             def forward(self, **kwargs):
                 # Inject the hint into the kwargs
                 kwargs['hint'] = self.hint
@@ -121,7 +115,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     elif llm_model in SUPPORTED_GROQ_MODELS:
         lm = dspy.LM(f'groq/{llm_model}', api_key=os.environ.get("GROQ_API_KEY"))
     elif llm_model in SUPPORTED_GOOGLE_MODELS:
-        lm = dspy.LM(f'google/{llm_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
+        lm = dspy.LM(f'gemini/{llm_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported LLM model: {llm_model}")
 
@@ -139,7 +133,7 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     elif teacher_model in SUPPORTED_GROQ_MODELS:
         teacher_lm = dspy.LM(f'groq/{teacher_model}', api_key=os.environ.get("GROQ_API_KEY"))
     elif teacher_model in SUPPORTED_GOOGLE_MODELS:
-        teacher_lm = dspy.LM(f'google/{teacher_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
+        teacher_lm = dspy.LM(f'gemini/{teacher_model}', api_key=os.environ.get("GOOGLE_API_KEY"))
     else:
         raise ValueError(f"Unsupported teacher model: {teacher_model}")
 
@@ -326,8 +320,9 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
     kwargs = dict(num_threads=1, display_progress=True, display_table=1)
 
     # Evaluate the module to establish a baseline
+    # Evaluate now returns an EvaluationResult object, so extract the score
     baseline_evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
-    baseline_score = baseline_evaluate(module)
+    baseline_score = baseline_evaluate(module).score
 
     # Set up the optimizer
     if optimizer == "BootstrapFewShot":
@@ -337,39 +332,37 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
         teleprompter = BootstrapFewShotWithRandomSearch(metric=metric, teacher_settings=dict(lm=teacher_lm), num_threads=1)
         compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     elif optimizer == "COPRO":
-        teleprompter = COPRO(metric=metric, teacher_settings=dict(lm=teacher_lm))
+        teleprompter = COPRO(metric=metric, prompt_model=teacher_lm)
         compiled_program = teleprompter.compile(module, trainset=trainset, eval_kwargs=kwargs)
-    elif optimizer == "MIPRO":
-        teleprompter = MIPRO(metric=metric, teacher_settings=dict(lm=teacher_lm), prompt_model=teacher_lm, task_model=lm)
-        num_trials = 10  # Adjust this value as needed
-        max_bootstrapped_demos = 5  # Adjust this value as needed
-        max_labeled_demos = 5  # Adjust this value as needed
-        compiled_program = teleprompter.compile(module, trainset=trainset, num_trials=num_trials,
-            max_bootstrapped_demos=max_bootstrapped_demos,
-            max_labeled_demos=max_labeled_demos,
-            eval_kwargs=kwargs, requires_permission_to_run=False)
     elif optimizer == "MIPROv2":
-        teleprompter = MIPROv2(metric=metric, prompt_model=lm, task_model=teacher_lm, num_candidates=10, init_temperature=1.0)
+        # MIPRO was removed in DSPy 3.x; MIPROv2 now sizes its search via the 'auto' setting
+        teleprompter = MIPROv2(metric=metric, prompt_model=teacher_lm, task_model=lm, teacher_settings=dict(lm=teacher_lm), auto="medium", init_temperature=1.0)
 
-        num_batches = 30
         max_bootstrapped_demos = 8
         max_labeled_demos = 16
         compiled_program = teleprompter.compile(
             module,
             trainset=trainset,
             valset=devset,
-            num_batches=num_batches,
             max_bootstrapped_demos=max_bootstrapped_demos,
-            max_labeled_demos=max_labeled_demos,
-            eval_kwargs=kwargs,
-            requires_permission_to_run=False
+            max_labeled_demos=max_labeled_demos
         )
+    elif optimizer == "GEPA":
+        # GEPA metrics receive extra arguments (pred_name, pred_trace) and can return
+        # textual feedback alongside the score, so wrap the selected metric accordingly
+        def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+            score = metric(gold, pred, trace)
+            return dspy.Prediction(score=float(score), feedback=f"The score for this prediction was {float(score)}.")
+
+        # GEPA reflects on prompts in natural language, so use the stronger teacher model as the reflection LM
+        teleprompter = GEPA(metric=gepa_metric, auto="light", reflection_lm=teacher_lm, num_threads=1)
+        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
     # Evaluate the compiled program
     evaluate = Evaluate(metric=metric, devset=devset, num_threads=1)
-    score = evaluate(compiled_program)
+    score = evaluate(compiled_program).score
 
     print("Evaluation Score:")
     print(score)
