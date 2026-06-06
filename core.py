@@ -9,7 +9,7 @@ from openai import OpenAI
 
 from typing import List, Dict, Any
 from dspy.evaluate import Evaluate
-from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune
+from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, GEPA, BootstrapFinetune
 
 # List of supported Groq models
 SUPPORTED_GROQ_MODELS = [
@@ -347,6 +347,16 @@ def compile_program(input_fields: List[str], output_fields: List[str], dspy_modu
             max_bootstrapped_demos=max_bootstrapped_demos,
             max_labeled_demos=max_labeled_demos
         )
+    elif optimizer == "GEPA":
+        # GEPA metrics receive extra arguments (pred_name, pred_trace) and can return
+        # textual feedback alongside the score, so wrap the selected metric accordingly
+        def gepa_metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+            score = metric(gold, pred, trace)
+            return dspy.Prediction(score=float(score), feedback=f"The score for this prediction was {float(score)}.")
+
+        # GEPA reflects on prompts in natural language, so use the stronger teacher model as the reflection LM
+        teleprompter = GEPA(metric=gepa_metric, auto="light", reflection_lm=teacher_lm, num_threads=1)
+        compiled_program = teleprompter.compile(module, trainset=trainset, valset=devset)
     else:
         raise ValueError(f"Unsupported optimizer: {optimizer}")
 
