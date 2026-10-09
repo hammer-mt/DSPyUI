@@ -44,7 +44,7 @@ from dspy.signatures.signature import make_signature
 from dspyui import __version__ as DSPYUI_VERSION
 
 # Example data ships inside the package so the demo buttons work after
-# `pip install dspyui` as well as from a git checkout.
+# `pip install dspyui-gradio` as well as from a git checkout.
 PACKAGE_DIR = Path(__file__).resolve().parent
 EXAMPLE_DATA_DIR = PACKAGE_DIR / "example_data"
 

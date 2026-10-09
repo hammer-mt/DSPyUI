@@ -5,7 +5,7 @@ None currently! Previous bugs were fixed:
 
 ## Backlog
 - ✅ Upgrade to DSPy 3.0 and latest version of gradio (COMPLETED - DSPy 3.4.0, Gradio 5.50; Gradio 6 renders the UI differently, so it is pinned to 5.x for now)
-- ✅ Package for PyPI as `dspyui` (pyproject.toml, `dspyui` command)
+- ✅ Package for PyPI as `dspyui-gradio` (pyproject.toml, `dspyui` command; the plain `dspyui` name is blocked on PyPI as too similar to `dspy-ui`)
 - ✅ GEPA optimizer, current models, OpenRouter support
 - Support Gradio 6 (needs the layout re-checked; the Data section and custom CSS need changes)
 - Replace ProgramOfThought before DSPy 3.5 removes it (DSPy recommends RLM)

@@ -7,14 +7,16 @@ A Gradio user interface for DSPy - making DSPy accessible to non-technical users
 ### Install from PyPI
 
 ```bash
-pip install dspyui
+pip install dspyui-gradio
 dspyui
 ```
+
+The package is called `dspyui-gradio` on PyPI (the plain `dspyui` name was not available); the command it installs is `dspyui`.
 
 Or run it without installing anything, in its own isolated environment, using [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uvx dspyui
+uvx dspyui-gradio
 ```
 
 Then open http://127.0.0.1:7860. Compiled programs, prompts and datasets are saved in the folder you launch from, and API keys are read from a `.env` file in that folder (or entered in the **Settings** tab).
@@ -29,7 +31,7 @@ OPENROUTER_API_KEY=sk-or-...
 
 That one key works for every model in the Model and Teacher lists, including the defaults (`openai/gpt-5.6-luna` and `openai/gpt-5.6-sol`) and the Claude, Gemini and open-source models: when a provider's own key is not set, DSPyUI sends that model through OpenRouter for you. Keys for OpenAI, Anthropic, Google Gemini and Groq are optional and only needed if you want to call that provider directly.
 
-> Reading *Context Engineering with DSPy*? Install DSPyUI in its own environment (`uvx dspyui` does this for you) rather than into the book's companion repository environment, so its pinned package versions stay untouched.
+> Reading *Context Engineering with DSPy*? Install DSPyUI in its own environment (`uvx dspyui-gradio` does this for you) rather than into the book's companion repository environment, so its pinned package versions stay untouched.
 
 ### From a clone of this repository
 

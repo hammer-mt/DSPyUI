@@ -3,7 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dspyui"
+# The PyPI name. Plain "dspyui" is not available (PyPI rejects it as too similar
+# to an existing project), but the import name and the command are still `dspyui`.
+name = "dspyui-gradio"
 dynamic = ["version"]
 description = "A Gradio user interface for DSPy: define a signature, add data, optimize the prompt and test it, without writing code."
 readme = "README.md"
@@ -41,6 +43,8 @@ dev = ["pytest>=8.0", "mypy>=1.18.0", "types-requests>=2.32.0"]
 
 [project.scripts]
 dspyui = "dspyui.cli:main"
+# Same command under the PyPI name, so `uvx dspyui-gradio` works.
+dspyui-gradio = "dspyui.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/hammer-mt/DSPyUI"
