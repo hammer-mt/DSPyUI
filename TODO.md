@@ -4,7 +4,11 @@ None currently! Previous bugs were fixed:
 - ✅ KeyError: 12 in blocks_config.fns (fixed with Gradio 5 upgrade)
 
 ## Backlog
-- ✅ Upgrade to DSPy 3.0 and latest version of gradio (COMPLETED - DSPy 3.0.3, Gradio 5.48.0)
+- ✅ Upgrade to DSPy 3.0 and latest version of gradio (COMPLETED - DSPy 3.4.0, Gradio 5.50; Gradio 6 renders the UI differently, so it is pinned to 5.x for now)
+- ✅ Package for PyPI as `dspyui` (pyproject.toml, `dspyui` command)
+- ✅ GEPA optimizer, current models, OpenRouter support
+- Support Gradio 6 (needs the layout re-checked; the Data section and custom CSS need changes)
+- Replace ProgramOfThought before DSPy 3.5 removes it (DSPy recommends RLM)
 - ✅ Build some way to chain the modules together in agentic workflows (COMPLETED - Chain Builder tab with sequential module chaining)
 - ✅ add a place to put API keys then push to gradio spaces (COMPLETED - Settings tab with API key inputs, app.py for Spaces deployment)
 - ✅ add cost tracking and prediction of cost to the interface (COMPLETED - actual cost tracking and display in UI)

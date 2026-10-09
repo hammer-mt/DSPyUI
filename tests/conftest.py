@@ -5,7 +5,6 @@ import os
 import subprocess
 import time
 import pytest
-from playwright.sync_api import sync_playwright
 
 
 @pytest.fixture(scope="session")
@@ -59,6 +58,9 @@ def page(gradio_server):
     """
     Create a new browser page for each test.
     """
+    # Imported here so the offline unit tests (test_core.py) run without Playwright
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()

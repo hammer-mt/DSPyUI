@@ -49,14 +49,12 @@ if [ -f requirements.txt ]; then
 else
     echo "Warning: requirements.txt not found. Installing packages manually..."
     pip install --upgrade \
-        "gradio>=5.0.0" \
-        pandas \
-        openai \
-        anthropic \
-        groq \
-        scikit-learn \
-        google-generativeai \
-        "dspy-ai>=3.0.0"
+        "gradio>=5.50.0,<6" \
+        "dspy>=3.3.0" \
+        "optuna>=3.4.0" \
+        "pandas>=2.0.0" \
+        "numpy>=1.26" \
+        python-dotenv
 fi
 
 # Check if the Python script exists

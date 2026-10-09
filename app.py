@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import and launch the Gradio interface
-from interface import demo
+from dspyui.interface import demo
 
 if __name__ == "__main__":
     # Launch with Spaces-appropriate settings

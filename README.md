@@ -4,7 +4,34 @@ A Gradio user interface for DSPy - making DSPy accessible to non-technical users
 
 ## Quick Start
 
-### Local Deployment
+### Install from PyPI
+
+```bash
+pip install dspyui
+dspyui
+```
+
+Or run it without installing anything, in its own isolated environment, using [uv](https://docs.astral.sh/uv/):
+
+```bash
+uvx dspyui
+```
+
+Then open http://127.0.0.1:7860. Compiled programs, prompts and datasets are saved in the folder you launch from, and API keys are read from a `.env` file in that folder (or entered in the **Settings** tab).
+
+### API key: use OpenRouter (recommended)
+
+The easiest way to run DSPyUI is with a single [OpenRouter](https://openrouter.ai/keys) key. Put it in a `.env` file in the folder you launch from:
+
+```bash
+OPENROUTER_API_KEY=sk-or-...
+```
+
+That one key works for every model in the Model and Teacher lists, including the defaults (`openai/gpt-5.6-luna` and `openai/gpt-5.6-sol`) and the Claude, Gemini and open-source models: when a provider's own key is not set, DSPyUI sends that model through OpenRouter for you. Keys for OpenAI, Anthropic, Google Gemini and Groq are optional and only needed if you want to call that provider directly.
+
+> Reading *Context Engineering with DSPy*? Install DSPyUI in its own environment (`uvx dspyui` does this for you) rather than into the book's companion repository environment, so its pinned package versions stay untouched.
+
+### From a clone of this repository
 
 ```bash
 bash webui.sh
@@ -16,11 +43,27 @@ Deploy to Hugging Face Spaces for free cloud hosting! See [README_SPACES.md](REA
 
 [![Deploy to Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/deploy-to-spaces-lg.svg)](https://huggingface.co/spaces)
 
+## Coming from the book?
+
+Chapter 10 of *Context Engineering with DSPy* ("Building a Gradio User Interface (DSPyUI)") and its companion notebook walk through a compact version of this app. The same building blocks, with the same names, live in [`dspyui/core.py`](dspyui/core.py) in the same order as the chapter. Search that file for `BOOK:` to jump between them.
+
+| Book section | In the code (`dspyui/core.py`) | In the app ("Compile Program" tab) |
+| :--- | :--- | :--- |
+| Signatures | `create_custom_signature()` | Task Instructions, Inputs, Outputs |
+| Modules | `MODEL_OPTIONS`, `create_module()` | Settings: Model (student), Teacher, Module |
+| Datasets | `load_and_split()` | Data: Upload CSV / Enter manually, and the three Demo Examples |
+| Optimization | `create_metric()`, `compile_program()` | Settings: Optimizer, Metric, then **Compile Program** and Results |
+| Inference | `run_inference()` | Select a row, **Generate**, and the Optimized Prompt box |
+
+The full app adds a few things the chapter leaves out: two more modules (ChainOfThoughtWithHint, ProgramOfThought), two more optimizers (COPRO, LabeledFewShot), cost tracking, the **View Prompts** tab for saved programs, the **Build Chain** tab and the **Settings** tab. In the code these are marked "Beyond the book".
+
 ## Requirements
 
-- Python 3.10 or higher (required for DSPy 3.0)
-- API keys for LLM providers (OpenAI, Anthropic, Groq, and/or Google)
-  - Can be configured via UI in the **Settings** tab (no .env file needed for Spaces!)
+- Python 3.10 to 3.14
+- An API key. **OpenRouter is recommended**: one `OPENROUTER_API_KEY` covers every model in the lists
+  - Set it in a `.env` file (see `.env.example`), or in the **Settings** tab (no .env file needed for Spaces!)
+  - Keys for OpenAI, Anthropic, Google Gemini and Groq are optional. If you set one, that provider's models are called directly; otherwise they go through OpenRouter
+  - Local models (`local:<name>`) need no key
 
 ## Setup
 
@@ -30,7 +73,7 @@ Deploy to Hugging Face Spaces for free cloud hosting! See [README_SPACES.md](REA
 
 The script will automatically:
 - Create a virtual environment
-- Install dependencies (Gradio 5.x, DSPy 3.0, and LLM clients)
+- Install dependencies (Gradio 5.x and DSPy 3.x)
 - Load environment variables from `.env`
 - Launch the Gradio interface
 
@@ -43,15 +86,27 @@ pip install -r requirements.txt
 gradio interface.py
 ```
 
+## Project Layout
+
+```
+dspyui/
+├── core.py          # The DSPy logic: signatures, modules, datasets, optimizers, inference
+├── interface.py     # The Gradio web form
+├── cli.py           # The `dspyui` command
+└── example_data/    # Demo datasets and a pre-compiled judge
+interface.py         # Launcher for `gradio interface.py` / webui.sh
+app.py               # Hugging Face Spaces entry point
+```
+
 ## Features
 
 - Visual interface for DSPy program compilation
 - **🔗 Chain Builder** - create multi-step DSPy programs by chaining modules together
 - **⚙️ Settings Tab** - configure API keys directly in the UI (no .env file needed!)
-- Support for multiple LLM providers (OpenAI, Anthropic, Groq, Google)
+- **OpenRouter support (recommended)** - one API key for every model, or use OpenAI, Anthropic, Google Gemini and Groq keys directly
 - **Local LLM support** (LM Studio, Ollama, llama.cpp)
 - Built-in DSPy modules (Predict, ChainOfThought, ChainOfThoughtWithHint, **ProgramOfThought**)
-- Built-in optimizers (BootstrapFewShot, BootstrapFewShotWithRandomSearch, MIPROv2, COPRO, BootstrapFinetune, **LabeledFewShot**)
+- Built-in optimizers (BootstrapFewShot, BootstrapRS, MIPROv2, **GEPA**, COPRO, LabeledFewShot)
 - Evaluation metrics (Exact Match, Cosine Similarity, LLM-as-a-Judge)
 - **Evaluation in generate interface** - see scores when testing predictions
 - **Cost tracking and display** - track actual costs and token usage for all compilations
@@ -63,9 +118,9 @@ gradio interface.py
 
 ## Technology Stack
 
-- **UI Framework**: Gradio 5.48.0
-- **DSPy Version**: 3.0.3 (pip-installed)
-- **Python**: 3.10+
+- **UI Framework**: Gradio 5 (5.50 or newer; Gradio 6 is not supported yet because it renders the interface differently)
+- **DSPy Version**: 3.3 or newer (tested with 3.4.0)
+- **Python**: 3.10 to 3.14
 - **Type Safety**: mypy with comprehensive type hints
 - **Data Validation**: Pydantic models for configuration
 - **Testing**: Playwright for end-to-end tests, pytest for unit tests
@@ -79,12 +134,20 @@ gradio interface.py
 
 ## Supported Optimizers
 
-- **BootstrapFewShot** - Few-shot learning for small datasets (~10 examples)
-- **BootstrapFewShotWithRandomSearch** - Few-shot with random search for medium datasets (~50 examples)
-- **MIPROv2** - Instruction optimization for large datasets (300+ examples)
-- **COPRO** - Prompt optimization for large datasets (300+ examples)
-- **BootstrapFinetune** - Distill prompts into fine-tuned model weights
-- **LabeledFewShot** - Simple labeled examples without optimization (any dataset size)
+| Optimizer | Best for |
+| :--- | :--- |
+| **BootstrapFewShot** | Small datasets (~10 examples), quick iteration |
+| **BootstrapRS** | Medium datasets (50+), need reliable improvement |
+| **MIPROv2** | Large datasets (100+), production optimization |
+| **GEPA** | Creative/subjective tasks, instruction tuning |
+| **COPRO** | Instruction-only optimization |
+| **LabeledFewShot** | Simple labeled examples without optimization (any dataset size) |
+
+BootstrapRS is DSPy's short name for BootstrapFewShotWithRandomSearch. The Build Chain tab also offers **BootstrapFinetune**, which distills prompts into fine-tuned model weights.
+
+## Supported Models
+
+The Model and Teacher dropdowns use DSPy's `provider/model` names, for example `openai/gpt-5.6-luna` (the default student), `openai/gpt-5.6-sol` (the default teacher), `anthropic/claude-opus-4.8` and `gemini/gemini-3.5-flash`. The list lives in `MODEL_OPTIONS` in `dspyui/core.py`, and you can type any other model name that DSPy understands, including `openrouter/...` models and `local:<name>` for a local server.
 
 ## Evaluation Features
 
@@ -123,14 +186,11 @@ DSPyUI automatically tracks and displays costs for all program compilations:
 - **Per-model pricing**: Separate tracking for student and teacher models
 
 ### Supported Providers
-- OpenAI (gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-3.5-turbo)
-- Anthropic (Claude 3.5 Sonnet, Claude 3 Opus/Sonnet/Haiku)
-- Groq (Mixtral, Llama 3, Gemma)
-- Google (Gemini 1.5 Flash/Pro)
+- OpenRouter (recommended), OpenAI, Anthropic, Google Gemini and Groq
 - Local LLMs ($0 cost)
 
 ### Pricing Data
-Model pricing is maintained in `core.py` and updated periodically to reflect current provider rates (as of January 2025).
+Costs are the ones DSPy records for each call (via LiteLLM's price list), added up across the student and teacher models. A small fallback table for local and older models is kept in `dspyui/core.py`.
 
 ## Local LLM Support
 
@@ -241,6 +301,9 @@ Run tests:
 ```bash
 source dspyui_env/bin/activate
 
+# Fast offline unit tests for the core (no API keys or browser needed)
+pytest tests/test_core.py
+
 # Run all tests (pytest + REST API)
 python gradio_test_runner.py
 
@@ -257,7 +320,7 @@ python gradio_test_runner.py --generate-mocks
 python gradio_test_runner.py --verbose
 
 # Type checking
-mypy core.py interface.py gradio_test_runner.py
+mypy dspyui/core.py dspyui/interface.py gradio_test_runner.py
 ```
 
 The test runner:

@@ -15,11 +15,8 @@ This guide explains how to deploy DSPyUI to Hugging Face Spaces.
    - **Space hardware**: CPU Basic (free tier works!)
 4. Link your GitHub repository or upload files:
    - `app.py`
-   - `interface.py`
-   - `core.py`
-   - `models.py`
    - `requirements.txt`
-   - `example_data/` directory
+   - `dspyui/` directory (the app itself, including `dspyui/example_data/`)
 5. Spaces will automatically detect `app.py` and launch the application
 
 ### Option 2: Deploy via Hugging Face CLI
@@ -39,8 +36,8 @@ git clone https://huggingface.co/spaces/YOUR_USERNAME/dspyui
 cd dspyui
 
 # Copy DSPyUI files
-cp /path/to/DSPyUI/{app.py,interface.py,core.py,models.py,requirements.txt} .
-cp -r /path/to/DSPyUI/example_data .
+cp /path/to/DSPyUI/{app.py,requirements.txt} .
+cp -r /path/to/DSPyUI/dspyui .
 
 # Commit and push
 git add .
@@ -55,7 +52,8 @@ git push
 **DSPyUI on Spaces does NOT require a `.env` file!** Instead:
 
 1. Navigate to the **Settings** tab in the application
-2. Enter your API keys for the providers you want to use:
+2. Enter your API key. **OpenRouter is recommended**: one key works for every model in the Model and Teacher lists. The others are optional, for calling a provider directly:
+   - **OpenRouter** (recommended)
    - **OpenAI** (for GPT models)
    - **Anthropic** (for Claude models)
    - **Groq** (for Groq models)
@@ -66,14 +64,14 @@ git push
 ### Security Notes
 
 ✅ **Your API keys are secure:**
-- Keys are stored in session state only
-- Keys are never saved to disk or logs
+- Keys are stored in session state only (on the server, for your session)
+- Keys are never saved to disk or logs, and never written to the server's environment
 - Keys are cleared when you close your browser
-- Each user session is isolated
+- Each user session is isolated: other visitors cannot see or use the keys you enter
+- Keys that the Space owner configured as secrets are never sent to anyone's browser; the Settings tab only shows whether a provider is configured
 
 ⚠️ **Important:**
 - You'll need to re-enter API keys in each new session
-- Don't share your Space URL with API keys already configured
 - Consider using Spaces Secrets for permanent deployment (see below)
 
 ### Using Local LLMs (No API Keys Required!)
@@ -94,25 +92,18 @@ For a more permanent deployment where API keys don't need to be re-entered:
 
 1. Go to your Space settings on Hugging Face
 2. Navigate to **Repository secrets**
-3. Add secrets:
+3. Add secrets. `OPENROUTER_API_KEY` on its own is enough (recommended); the rest are optional:
+   - `OPENROUTER_API_KEY`
    - `OPENAI_API_KEY`
    - `ANTHROPIC_API_KEY`
    - `GROQ_API_KEY`
-   - `GOOGLE_API_KEY`
-4. Modify `app.py` to load secrets:
+   - `GEMINI_API_KEY` (or `GOOGLE_API_KEY`)
 
-```python
-import os
-from huggingface_hub import HfFolder
+No code changes are needed: Spaces passes secrets to the app as environment variables, which is where DSPyUI looks for keys.
 
-# Load secrets from Spaces environment
-for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "GOOGLE_API_KEY"]:
-    secret_value = os.environ.get(key)
-    if secret_value:
-        os.environ[key] = secret_value
-```
+4. Users can still use their own key for a provider by entering it in the Settings tab (it applies to their session only)
 
-5. Users can still override these with the Settings tab
+⚠️ **Secrets are shared with everyone who can open the Space.** Visitors cannot read the keys, but every program a visitor compiles or runs is billed to the Space owner's keys. Keep a Space with secrets **private**, or leave the secrets out and let each visitor enter their own keys.
 
 ## Hardware Requirements
 
@@ -138,14 +129,14 @@ for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "GOOGLE_API_K
 ```
 your-space/
 ├── app.py                  # Spaces entry point
-├── interface.py            # Gradio UI
-├── core.py                 # DSPy logic
-├── models.py              # Pydantic models
 ├── requirements.txt        # Python dependencies
-├── example_data/          # Demo datasets
-│   ├── jokes.csv
-│   ├── jokes2.csv
-│   └── jokes3.csv
+├── dspyui/
+│   ├── interface.py        # Gradio UI
+│   ├── core.py             # DSPy logic
+│   └── example_data/       # Demo datasets
+│       ├── rating_jokes.csv
+│       ├── telling_jokes.csv
+│       └── rewriting_jokes.csv
 └── README.md              # This file (optional, for Space description)
 ```
 
@@ -162,15 +153,12 @@ your-space/
 Ensure `requirements.txt` includes all dependencies. Should contain:
 
 ```
-gradio>=5.0.0
-dspy-ai>=3.0.0
+gradio>=5.50.0,<6
+dspy>=3.3.0
+optuna>=3.4.0
 pandas>=2.0.0
-openai>=1.0.0
-anthropic>=0.40.0
-groq>=0.12.0
-google-generativeai>=0.8.0
-scikit-learn>=1.3.0
-pydantic>=2.0.0
+numpy>=1.26
+python-dotenv>=1.0.0
 ```
 
 ### "API key not found"
@@ -204,7 +192,7 @@ emoji: 🧠
 colorFrom: blue
 colorTo: purple
 sdk: gradio
-sdk_version: 5.48.0
+sdk_version: 5.50.0
 app_file: app.py
 pinned: false
 license: apache-2.0

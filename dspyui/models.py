@@ -77,9 +77,11 @@ class OptimizerConfig(BaseModel):
 
     optimizer_type: Literal[
         "BootstrapFewShot",
-        "BootstrapFewShotWithRandomSearch",
-        "COPRO",
+        "BootstrapRS",
+        "BootstrapFewShotWithRandomSearch",  # older name for BootstrapRS
         "MIPROv2",
+        "GEPA",
+        "COPRO",
         "LabeledFewShot",
         "BootstrapFinetune"
     ] = Field(..., description="Type of optimizer to use")
@@ -310,34 +312,37 @@ class CostEstimate(BaseModel):
         return "\n".join(lines)
 
 
-# Supported model lists
+# Supported model lists, in DSPy's "provider/model" format.
+# The dropdowns in the app use MODEL_OPTIONS in core.py; these group the same
+# models by provider.
 SUPPORTED_OPENAI_MODELS = [
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo"
+    "openai/gpt-5.6-luna",
+    "openai/gpt-5.6-sol",
+    "openai/gpt-5.6-terra"
 ]
 
 SUPPORTED_ANTHROPIC_MODELS = [
-    "claude-3-5-sonnet-20240620",
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307"
+    "anthropic/claude-opus-4.8",
+    "anthropic/claude-sonnet-5.5",
+    "anthropic/claude-haiku-5.5"
 ]
 
 SUPPORTED_GROQ_MODELS = [
-    "mixtral-8x7b-32768",
-    "gemma-7b-it",
-    "llama3-70b-8192",
-    "llama3-8b-8192",
-    "gemma2-9b-it"
+    "groq/openai/gpt-oss-120b"
 ]
 
 SUPPORTED_GOOGLE_MODELS = [
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini/gemini-3.5-flash",
+    "gemini/gemini-3.8-flash"
+]
+
+SUPPORTED_OPENROUTER_MODELS = [
+    "openrouter/openai/gpt-5.6-luna",
+    "openrouter/openai/gpt-5.6-sol",
+    "openrouter/anthropic/claude-opus-4.8",
+    "openrouter/google/gemini-3.5-flash",
+    "openrouter/moonshotai/kimi-k2.6",
+    "openrouter/meta-llama/llama-3.1-8b-instruct"
 ]
 
 ALL_SUPPORTED_MODELS = (
@@ -345,5 +350,6 @@ ALL_SUPPORTED_MODELS = (
     SUPPORTED_ANTHROPIC_MODELS +
     SUPPORTED_GROQ_MODELS +
     SUPPORTED_GOOGLE_MODELS +
+    SUPPORTED_OPENROUTER_MODELS +
     ["local:model-name"]  # Placeholder for local models
 )

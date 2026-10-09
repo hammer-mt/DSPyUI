@@ -1,0 +1,1578 @@
+"""
+DSPyUI interface: the Gradio web form.
+
+READING GUIDE (for readers of "Context Engineering with DSPy")
+==============================================================
+Chapter 10, "Building a Gradio User Interface (DSPyUI)", describes the workflow
+this file puts on screen. The DSPy logic lives in core.py; this file only
+collects what the user typed and shows the results. Search for "BOOK:" to find
+where each section of the chapter appears in the app:
+
+    Book section   Where it is in the app ("Compile Program" tab, top to bottom)
+    -------------  ------------------------------------------------------------
+    Signatures     Task Instructions, Inputs, Outputs
+    Datasets       Data (Upload CSV / Enter manually) and the Demo Examples
+    Modules        Settings: Model, Teacher, Module
+    Optimization   Settings: Optimizer, Metric -> "Compile Program" -> Results
+    Inference      "Select a row from the dataset" -> "Generate", and the
+                   "Optimized Prompt" box (the full prompt sent to the LM).
+                   Saved programs are listed in the "View Prompts" tab.
+
+The other tabs go beyond the book: "Build Chain" (multi-step programs) and
+"Settings" (API keys).
+"""
+
+import gradio as gr
+import pandas as pd
+import json
+import os
+import random
+import datetime
+
+from dspyui.core import (
+    compile_from_ui,
+    list_prompts,
+    export_to_csv,
+    generate_program_response,
+    normalize_optimizer_name,
+    use_api_keys,
+    key_is_set,
+    MODEL_OPTIONS,
+    OPTIMIZER_OPTIONS,
+    DEFAULT_STUDENT_MODEL,
+    DEFAULT_TEACHER_MODEL,
+    EXAMPLE_DATA_DIR,
+    EXAMPLE_JUDGE_ID,
+)
+
+
+# Gradio interface
+custom_css = """
+.expand-button {
+  min-width: 20px !important;
+  width: 20px !important;
+  padding: 0 !important;
+  font-size: 10px !important;
+}
+.prompt-card {
+  height: 150px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  padding: 10px !important;
+  position: relative !important;
+}
+.prompt-details {
+  flex-grow: 1 !important;
+}
+.view-details-btn {
+  position: absolute !important;
+  bottom: 10px !important;
+  right: 10px !important;
+}
+.red-text {
+  color: red !important;
+}
+"""
+
+# The pre-compiled joke judge that ships with DSPyUI (default for LLM-as-a-Judge)
+example2_signature = f"{EXAMPLE_JUDGE_ID}.json - joke, topic -> funny (Score: 100)"
+
+with gr.Blocks(css=custom_css) as demo:
+
+    # API keys entered in the Settings tab. gr.State is separate for every
+    # browser session and stays on the server, so one visitor's keys are never
+    # shown to, or used by, another visitor. Keys from the environment (.env)
+    # are not copied in here: they are read by DSPy when needed.
+    api_keys_state = gr.State({})
+
+    # Compile Program Tab
+    with gr.Tabs():
+        with gr.TabItem("Compile Program"):
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("# DSPyUI: a Gradio user interface for DSPy")
+                    gr.Markdown("Compile a DSPy program by specifying your settings and providing example data.")
+
+                # BOOK: Datasets -- "DSPyUI ships with three demo examples: rating
+                # jokes, telling jokes, and rewriting jokes, each with a prebuilt CSV."
+                with gr.Column():
+                    gr.Markdown("### Demo Examples:")
+                    with gr.Row():
+                        example1 = gr.Button("Judging Jokes")
+                        example2 = gr.Button("Telling Jokes")
+                        example3 = gr.Button("Rewriting Jokes")
+
+            # Info message for loaded prompts
+            loaded_prompt_info = gr.Markdown("", visible=False)
+
+            # BOOK: Signatures -- the Signature builder. The task instructions plus
+            # the input/output field names and descriptions below are everything
+            # core.create_custom_signature() needs to build a dspy.Signature.
+            # Task Instructions
+            with gr.Row():
+                with gr.Column(scale=4):
+                    instructions = gr.Textbox(
+                        label="Task Instructions",
+                        lines=3,
+                        placeholder="Enter detailed task instructions here.",
+                        info="Provide clear and comprehensive instructions for the task. This will guide the DSPy program in understanding the specific requirements and expected outcomes.",
+                        interactive=True  # Add this line to ensure the textbox is editable
+                    )
+
+            input_values = gr.State([])
+            output_values = gr.State([])
+            file_data = gr.State(None)
+            load_prompt_data = gr.State(None)  # State to track prompt data to load into compiler
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Inputs")
+                    gr.Markdown("Add input fields for your task. Each input field represents a piece of information your DSPy program will receive.")
+                    with gr.Row():
+                        add_input_btn = gr.Button("Add Input Field")
+                        remove_input_btn = gr.Button("Remove Last Input", interactive=False)
+
+                with gr.Column():
+                    gr.Markdown("### Outputs")
+                    gr.Markdown("Add output fields for your task. Each output field represents a piece of information your DSPy program will generate.")
+                    with gr.Row():  
+                        add_output_btn = gr.Button("Add Output Field")
+                        remove_output_btn = gr.Button("Remove Last Output", interactive=False)
+
+            def add_field(values):
+                new_values = values + [("", "")]
+                return new_values, gr.update(interactive=True)
+
+            def remove_last_field(values):
+                new_values = values[:-1] if values else values
+                return new_values, gr.update(interactive=bool(new_values))
+
+            add_input_btn.click(
+                add_field,
+                inputs=input_values,
+                outputs=[input_values, remove_input_btn]
+            )
+
+            remove_input_btn.click(
+                remove_last_field,
+                inputs=input_values,
+                outputs=[input_values, remove_input_btn]
+            )
+
+            add_output_btn.click(
+                add_field,
+                inputs=output_values,
+                outputs=[output_values, remove_output_btn]
+            )
+
+            remove_output_btn.click(
+                remove_last_field,
+                inputs=output_values,
+                outputs=[output_values, remove_output_btn]
+            )
+
+            def load_csv(filename):
+                try:
+                    df = pd.read_csv(EXAMPLE_DATA_DIR / filename)
+                    return df
+                except Exception as e:
+                    print(f"Error loading CSV: {e}")
+                    return None
+                
+            row_choice_options = gr.State([])
+
+            # concurrency_limit=1: the demo buttons and "Load into Compiler" change all
+            # three inputs at once, and Gradio must not run those re-renders in parallel.
+            @gr.render(inputs=[input_values, output_values, file_data], concurrency_limit=1)
+            def render_variables(input_values, output_values, file_data):
+                
+                inputs = []
+                outputs = []
+                with gr.Row():
+                    with gr.Column():
+                        if not input_values:
+                            gr.Markdown("Please add at least one input field.", elem_classes="red-text")
+   
+                        # BOOK: Signatures -- a gr.Textbox for each field name and
+                        # description; the Add/Remove buttons above change how
+                        # many are rendered. The ▼ button reveals the description.
+                        for i, input_value in enumerate(input_values):
+                            name, desc = input_value
+                            with gr.Group():
+                                with gr.Row():
+                                    input_name = gr.Textbox(
+                                        placeholder=f"Input{i+1}",
+                                        value=name if name else None,
+                                        key=f"input-name-{i}",
+                                        show_label=False,
+                                        label=f"Input {i+1} Name",
+                                        info="Specify the name of this input field.",
+                                        interactive=True,
+                                        scale=9
+                                    )
+                                    expand_btn = gr.Button("▼", size="sm", scale=1, elem_classes="expand-button")
+                                input_desc = gr.Textbox(
+                                    value=desc if desc else None,
+                                    placeholder=desc if desc else "Description (optional)",
+                                    key=f"input-desc-{i}",
+                                    show_label=False,
+                                    label=f"Input {i+1} Description",
+                                    info="Optionally provide a description for this input field.",
+                                    interactive=True,
+                                    visible=False
+                                )
+                                desc_visible = gr.State(False)
+                                expand_btn.click(
+                                    lambda v: (not v, gr.update(visible=not v)),
+                                    inputs=[desc_visible],
+                                    outputs=[desc_visible, input_desc]
+                                )
+                                inputs.extend([input_name, input_desc, desc_visible])
+                    
+                    with gr.Column():
+                        
+                        if not output_values:
+                            gr.Markdown("Please add at least one output field.", elem_classes="red-text")
+           
+                        for i, output_value in enumerate(output_values):
+                            name, desc = output_value
+                            with gr.Group():
+                                with gr.Row():
+                                    output_name = gr.Textbox(
+                                        placeholder=f"Output{i+1}",
+                                        value=name if name else None,
+                                        key=f"output-name-{i}",
+                                        show_label=False,
+                                        label=f"Output {i+1} Name",
+                                        info="Specify the name of this output field.",
+                                        scale=9,
+                                        interactive=True,
+                                    )
+                                    expand_btn = gr.Button("▼", size="sm", scale=1, elem_classes="expand-button")
+                                output_desc = gr.Textbox(
+                                    value=desc if desc else None,
+                                    placeholder=desc if desc else "Description (optional)",
+                                    key=f"output-desc-{i}",
+                                    show_label=False,
+                                    label=f"Output {i+1} Description",
+                                    info="Optionally provide a description for this output field.",
+                                    visible=False,
+                                    interactive=True,
+                                )
+                                desc_visible = gr.State(False)
+                                expand_btn.click(
+                                    lambda v: (not v, gr.update(visible=not v)),
+                                    inputs=[desc_visible],
+                                    outputs=[desc_visible, output_desc]
+                                )
+                                outputs.extend([output_name, output_desc, desc_visible])
+
+                    def update_judge_prompt_visibility(metric, *args):
+                        # Correctly assign input and output fields based on the actual arguments
+                        input_fields = []
+                        output_fields = []
+                        filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                        for arg in filtered_args:
+                            if arg and isinstance(arg, str) and arg.strip():
+                                if len(input_fields) < len(input_values):
+                                    input_fields.append(arg)
+                                elif len(output_fields) < len(output_values):
+                                    output_fields.append(arg)
+
+                        if metric == "LLM-as-a-Judge":
+                            
+                            prompts = list_prompts(output_filter=input_fields + output_fields)
+                            choices = [f"{p['ID']} - {p['Signature']} (Score: {p['Eval Score']})" for p in prompts] 
+                            choices.append(example2_signature)
+
+                            return gr.update(visible=True, choices=choices, value=example2_signature)
+                        else:
+                            return gr.update(visible=False, choices=[])
+
+                    metric_type.change(
+                        update_judge_prompt_visibility,
+                        inputs=[metric_type] + inputs + outputs,
+                        outputs=[judge_prompt]
+                    )
+
+                    # Function to show/hide k parameter for LabeledFewShot optimizer
+                    def update_optimizer_params_visibility(optimizer_value):
+                        return gr.update(visible=optimizer_value == "LabeledFewShot")
+
+                    optimizer.change(
+                        update_optimizer_params_visibility,
+                        inputs=[optimizer],
+                        outputs=[k_fewshot]
+                    )
+
+                    random_row_button.click(
+                        select_random_row,
+                        inputs=[row_choice_options],
+                        outputs=[row_selector]
+                    )
+
+                    def compile(data):
+                        input_fields = []
+                        input_descs = []
+                        output_fields = []
+                        output_descs = []
+                        
+                        # BOOK: Signatures -- collect the field names and descriptions
+                        # from the form (one description per field, "" if left blank)
+                        for i in range(0, len(inputs), 3):
+                            if data[inputs[i]].strip():
+                                input_fields.append(data[inputs[i]].strip())
+                                input_descs.append((data[inputs[i+1]] or "").strip())
+
+                        for i in range(0, len(outputs), 3):
+                            if data[outputs[i]].strip():
+                                output_fields.append(data[outputs[i]].strip())
+                                output_descs.append((data[outputs[i+1]] or "").strip())
+
+                        # Get the judge prompt ID if LLM-as-a-Judge is selected
+                        judge_prompt_id = None
+                        if data[metric_type] == "LLM-as-a-Judge":
+                            judge_prompt_id = data[judge_prompt].split(' - ')[0]
+
+                        hint = data[hint_textbox] if data[dspy_module] == "ChainOfThoughtWithHint" else None
+                        max_iters_value = int(data[max_iters]) if data[dspy_module] == "ProgramOfThought" else 3
+                        k_value = int(data[k_fewshot]) if data[optimizer] == "LabeledFewShot" else 16
+
+                        # Get base URLs for local LLMs
+                        student_base_url = data.get(llm_base_url) if data[llm_model].startswith("local:") else None
+                        teacher_base = data.get(teacher_base_url) if data[teacher_model].startswith("local:") else None
+
+                        # BOOK: Optimization -- hitting "Compile Program" runs the whole
+                        # workflow in core.py: create_custom_signature() -> create_module()
+                        # -> load_and_split() -> create_metric() -> compile_program()
+                        with use_api_keys(data[api_keys_state]):  # this session's keys from the Settings tab
+                            usage_instructions, optimized_prompt, cost_data = compile_from_ui(
+                                input_fields,
+                                output_fields,
+                                data[dspy_module],
+                                data[llm_model],
+                                data[teacher_model],
+                                data[example_data],
+                                data[optimizer],
+                                data[instructions],
+                                data[metric_type],
+                                judge_prompt_id,
+                                input_descs,
+                                output_descs,
+                                hint,  # Add the hint parameter
+                                max_iters_value,  # Add the max_iters parameter
+                                k_value,  # Add the k parameter for LabeledFewShot
+                                student_base_url,  # Add base URL for student model
+                                teacher_base  # Add base URL for teacher model
+                            )
+                        
+                        signature = f"{', '.join(input_fields)} -> {', '.join(output_fields)}"
+                        
+                        # Extract evaluation score from usage_instructions
+                        score_line = [line for line in usage_instructions.split('\n') if line.startswith("Evaluation score:")][0]
+                        evaluation_score = float(score_line.split(":")[1].strip())
+                        
+                        # Remove the evaluation score line from usage_instructions
+                        usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Evaluation score:")])
+
+                        # Extract baseline score from usage_instructions
+                        baseline_score_line = [line for line in usage_instructions.split('\n') if line.startswith("Baseline score:")][0]
+                        baseline_score = float(baseline_score_line.split(":")[1].strip())
+
+                        # Remove the baseline score line from usage_instructions
+                        usage_instructions = '\n'.join([line for line in usage_instructions.split('\n') if not line.startswith("Baseline score:")])
+
+                        # Extract human-readable ID from usage_instructions
+                        human_readable_id = None
+                        for line in usage_instructions.split('\n'):
+                            if "programs/" in line and ".json" in line:
+                                human_readable_id = line.split('programs/')[1].split('.json')[0]
+                                break
+                        
+                        if human_readable_id is None:
+                            raise ValueError("Could not extract human-readable ID from usage instructions")
+
+                        # Save details to JSON
+                        details = {
+                            "input_fields": input_fields,
+                            "input_descs": input_descs,
+                            "output_fields": output_fields,
+                            "output_descs": output_descs,
+                            "dspy_module": data[dspy_module],
+                            "llm_model": data[llm_model],
+                            "teacher_model": data[teacher_model],
+                            "optimizer": data[optimizer],
+                            "instructions": data[instructions],
+                            "signature": signature,
+                            "evaluation_score": evaluation_score,
+                            "baseline_score": baseline_score,
+                            "optimized_prompt": optimized_prompt,
+                            "usage_instructions": usage_instructions,
+                            "human_readable_id": human_readable_id,
+                            "metric_type": data[metric_type],
+                            "judge_prompt_id": judge_prompt_id,
+                            "hint": hint,
+                            "max_iters": max_iters_value,
+                            "k_fewshot": k_value,
+                            # Cost tracking fields
+                            "actual_cost": cost_data.get("actual_cost_usd"),
+                            "input_tokens": cost_data.get("input_tokens"),
+                            "output_tokens": cost_data.get("output_tokens"),
+                            "total_tokens": cost_data.get("total_tokens")
+                        }
+
+                        row_choice_options = [f"Row {i+1}" for i in range(len(data[example_data]))]
+                        
+                        # Create 'prompts' folder if it doesn't exist
+                        if not os.path.exists('prompts'):
+                            os.makedirs('prompts')
+                        
+                        # Save JSON file with human-readable ID
+                        json_filename = f"prompts/{human_readable_id}.json"
+                        with open(json_filename, 'w') as f:
+                            json.dump(details, f, indent=4)
+
+                        # Also save as consolidated .dspyui file
+                        from dspyui.core import save_consolidated_program
+                        try:
+                            consolidated_path = save_consolidated_program(
+                                human_readable_id,
+                                details,
+                                f"programs/{human_readable_id}.json",
+                                data[example_data]
+                            )
+                            print(f"Consolidated file saved to {consolidated_path}")
+                        except Exception as e:
+                            print(f"Warning: Failed to save consolidated file: {e}")
+
+                        # Format cost display
+                        cost_str = f"${cost_data.get('actual_cost_usd', 0):.4f}"
+                        tokens_str = f"{cost_data.get('total_tokens', 0):,} ({cost_data.get('input_tokens', 0):,} in + {cost_data.get('output_tokens', 0):,} out)"
+
+                        # BOOK: Optimization -- DSPy's Evaluate returns a score as a
+                        # percentage from 0 to 100, so the results read like
+                        # "Baseline: 45.00%, Optimized: 78.00%"
+                        score_summary_str = f"Baseline: {baseline_score:.2f}%, Optimized: {evaluation_score:.2f}%"
+
+                        return signature, evaluation_score, optimized_prompt, gr.update(choices=row_choice_options, visible=True, value="Row 1"), gr.update(visible=True), row_choice_options, gr.update(visible=True), gr.update(visible=True), human_readable_id, gr.update(visible=True), baseline_score, cost_str, tokens_str, gr.update(value=score_summary_str, visible=True)
+                    
+                # BOOK: Datasets -- upload a CSV whose columns match the Signature
+                # fields, or type examples straight into the gr.Dataframe table
+                # ("Enter manually"). core.load_and_split() turns the table into
+                # dspy.Example objects and splits them 80/20 into train and test.
+                gr.Markdown("### Data")
+                gr.Markdown("Provide example data for your task. This will help the DSPy compiler understand the format of your data. You can either enter the data manually or upload a CSV file with the correct column headers.")
+                with gr.Column():
+                    with gr.Row():
+                        enter_manually_btn = gr.Button("Enter manually", interactive=len(input_values) > 0 and len(output_values) > 0 and file_data is None)
+                        
+                        upload_csv_btn = gr.UploadButton("Upload CSV", file_types=[".csv"], interactive=len(input_values) > 0 and len(output_values) > 0 and file_data is None)
+
+                    headers = [input_value[0] for input_value in input_values] + [output_value[0] for output_value in output_values]
+                        
+                    example_data = gr.Dataframe(
+                        headers=headers,
+                        datatype=["str"] * (len(input_values) + len(output_values)),
+                        interactive=True,
+                        row_count=1,
+                        col_count=(len(input_values) + len(output_values), "fixed"),
+                        visible=file_data is not None,  # Only visible if file_data is not None
+                        label="Example Data",
+                        value=file_data if file_data is not None else pd.DataFrame(columns=headers)
+                    )
+                    export_csv_btn = gr.Button("Export to CSV", interactive=file_data is not None and len(input_values) > 0 and len(output_values) > 0)
+                    csv_download = gr.File(label="Download CSV", visible=False)
+                    error_message = gr.Markdown()
+                    
+                    def show_dataframe(*args):
+                        # Correctly assign input and output fields based on the actual arguments
+                        input_fields = []
+                        output_fields = []
+                        filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                        input_names = [name for name, _ in input_values]
+                        for arg in filtered_args:
+                            if arg and isinstance(arg, str) and arg.strip():
+                                if len(input_fields) < len(input_names):
+                                    input_fields.append(arg)
+                                elif len(output_fields) < len(output_values):
+                                    output_fields.append(arg)
+
+                        headers = input_fields + output_fields
+                        
+                        # Create a new dataframe with the correct headers
+                        new_df = pd.DataFrame(columns=headers)
+                        
+                        return gr.update(visible=True, value=new_df), gr.update(visible=True), gr.update(visible=True), gr.update(interactive=False), gr.update(interactive=False)
+
+                    enter_manually_btn.click(
+                        show_dataframe,
+                        inputs=inputs + outputs,
+                        outputs=[example_data, export_csv_btn, compile_button, enter_manually_btn, upload_csv_btn]
+                    )
+                    upload_csv_btn.upload(
+                        process_csv,
+                        inputs=[upload_csv_btn] + inputs + outputs,
+                        outputs=[example_data, example_data, compile_button, error_message, enter_manually_btn, upload_csv_btn]
+                    )
+
+                    export_csv_btn.click(
+                        export_to_csv,
+                        inputs=[example_data],
+                        outputs=[csv_download]
+                    ).then(
+                        lambda: gr.update(visible=True),
+                        outputs=[csv_download]
+                    )
+                
+                compile_button.click(
+                    compile,
+                    inputs=set(inputs + outputs + [llm_model, teacher_model, dspy_module, example_data, upload_csv_btn, optimizer, instructions, metric_type, judge_prompt, hint_textbox, max_iters, k_fewshot, llm_base_url, teacher_base_url, api_keys_state]),
+                    outputs=[signature, evaluation_score, optimized_prompt, row_selector, random_row_button, row_choice_options, generate_button, generate_output, human_readable_id, human_readable_id, baseline_score, cost_display, tokens_display, score_summary]
+                )
+
+                # BOOK: Inference -- run the saved program on a row of data.
+                # core.generate_program_response() re-creates the module, loads
+                # the saved state and calls it (see core.run_inference()).
+
+                def generate_response(human_readable_id, row_selector, df, api_keys):
+                    selected_row = df.iloc[int(row_selector.split()[1]) - 1].to_dict()
+                    print("selected_row:", selected_row)
+
+                    # Generate response with evaluation
+                    with use_api_keys(api_keys):
+                        result = generate_program_response(human_readable_id, selected_row, evaluate=True)
+
+                    # Unpack result
+                    if isinstance(result, tuple):
+                        output_text, score, metric_type = result
+
+                        # Show evaluation row if we have a score
+                        if score is not None:
+                            return (
+                                output_text,
+                                gr.update(visible=True),  # evaluation_row
+                                score,  # evaluation_score_display
+                                metric_type  # evaluation_metric_display
+                            )
+                        else:
+                            # No score available (no gold data or error)
+                            return (
+                                output_text,
+                                gr.update(visible=False),  # evaluation_row
+                                None,  # evaluation_score_display
+                                ""  # evaluation_metric_display
+                            )
+                    else:
+                        # Legacy return (shouldn't happen with evaluate=True)
+                        return (
+                            result,
+                            gr.update(visible=False),
+                            None,
+                            ""
+                        )
+
+                generate_button.click(
+                    generate_response,
+                    inputs=[human_readable_id, row_selector, example_data, api_keys_state],
+                    outputs=[generate_output, evaluation_row, evaluation_score_display, evaluation_metric_display]
+                )
+
+            gr.Markdown("### Settings")
+            # BOOK: Modules -- the user selects a student model (for inference:
+            # "Model") and a teacher model (for optimization: "Teacher"). The
+            # list is MODEL_OPTIONS in core.py; any other "provider/model" name
+            # DSPy understands can be typed in.
+            with gr.Row():
+                model_options = MODEL_OPTIONS
+                llm_model = gr.Dropdown(
+                    model_options,
+                    label="Model",
+                    value=DEFAULT_STUDENT_MODEL,
+                    info="Select the main language model for your DSPy program. Use 'local:' prefix for local LLMs (LM Studio, Ollama, etc.)",
+                    interactive=True,
+                    allow_custom_value=True
+                )
+                teacher_model = gr.Dropdown(
+                    model_options,
+                    label="Teacher",
+                    value=DEFAULT_TEACHER_MODEL,
+                    info="Select a more capable teacher model. Can also use local LLMs with 'local:' prefix.",
+                    interactive=True,
+                    allow_custom_value=True
+                )
+
+            # Local LLM configuration
+            with gr.Row(visible=False) as local_llm_config:
+                llm_base_url = gr.Textbox(
+                    label="Student Model Base URL",
+                    value="http://127.0.0.1:1234/v1",
+                    placeholder="http://127.0.0.1:1234/v1",
+                    info="Base URL for local LLM API (LM Studio, Ollama, llama.cpp server)",
+                    scale=1
+                )
+                teacher_base_url = gr.Textbox(
+                    label="Teacher Model Base URL",
+                    value="http://127.0.0.1:1234/v1",
+                    placeholder="http://127.0.0.1:1234/v1",
+                    info="Base URL for teacher model (can be same or different endpoint)",
+                    scale=1
+                )
+
+            # Show/hide local LLM config based on model selection
+            def update_local_config_visibility(student_model, teacher_model):
+                show = student_model.startswith("local:") or teacher_model.startswith("local:")
+                return gr.update(visible=show)
+
+            llm_model.change(
+                update_local_config_visibility,
+                inputs=[llm_model, teacher_model],
+                outputs=[local_llm_config]
+            )
+            teacher_model.change(
+                update_local_config_visibility,
+                inputs=[llm_model, teacher_model],
+                outputs=[local_llm_config]
+            )
+
+            # BOOK: Modules -- module selection is a dropdown: Predict or
+            # ChainOfThought (core.create_module()). The app adds two more:
+            # ChainOfThoughtWithHint and ProgramOfThought.
+            with gr.Row():
+                with gr.Column():
+                    dspy_module = gr.Dropdown(
+                        ["Predict", "ChainOfThought", "ChainOfThoughtWithHint", "ProgramOfThought"],
+                        label="Module",
+                        value="Predict",
+                        info="Choose the DSPy module that best fits your task. Predict is for simple tasks, ChainOfThought for complex reasoning, ChainOfThoughtWithHint for guided reasoning, and ProgramOfThought for tasks requiring code execution (requires deno installed).",
+                        interactive=True  # This line was likely already present
+                    )
+                    hint_textbox = gr.Textbox(
+                        label="Hint",
+                        lines=2,
+                        placeholder="Enter a hint for the Chain of Thought with Hint module.",
+                        visible=False,
+                        interactive=True  # Add this line
+                    )
+                    max_iters = gr.Slider(
+                        minimum=1,
+                        maximum=10,
+                        value=3,
+                        step=1,
+                        label="Max Iterations",
+                        info="Maximum number of code generation attempts for ProgramOfThought module.",
+                        visible=False,
+                        interactive=True
+                    )
+
+            # BOOK: Optimization -- the user selects an optimizer and a metric,
+            # then hits compile. The first four optimizers are Table 10-1 in the
+            # book (BootstrapRS is DSPy's short name for
+            # BootstrapFewShotWithRandomSearch); COPRO and LabeledFewShot are extras.
+            with gr.Row():
+                with gr.Column():
+                    optimizer = gr.Dropdown(
+                        OPTIMIZER_OPTIONS,
+                        label="Optimizer",
+                        value="BootstrapFewShot",
+                        info="Choose optimization strategy: BootstrapFewShot (small datasets, ~10 examples) uses few-shot learning for quick iteration; BootstrapRS (medium, 50+) adds randomized search for reliable improvement; MIPROv2 (large, 100+) also optimizes the prompt instructions; GEPA rewrites the instructions by reflecting on feedback, for creative or subjective tasks; COPRO optimizes the instructions only; LabeledFewShot (any size) uses simple labeled examples without optimization.",
+                        interactive=True
+                    )
+                    k_fewshot = gr.Slider(
+                        minimum=1,
+                        maximum=50,
+                        value=16,
+                        step=1,
+                        label="Number of Examples (k)",
+                        info="Number of labeled examples to use for LabeledFewShot optimizer.",
+                        visible=False,
+                        interactive=True
+                    )
+                with gr.Column():
+                    metric_type = gr.Radio(
+                        ["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
+                        label="Metric",
+                        value="Exact Match",
+                        info="Choose how to evaluate your program's performance. Exact Match is suitable for tasks with clear correct answers, while LLM-as-a-Judge is better for open-ended or subjective tasks. Cosine Similarity can be used for fuzzier matches tasks where the output needs to be similar to the correct answer.",
+                        interactive=True  # Add this line
+                    )
+                    judge_prompt = gr.Dropdown(
+                        choices=[],
+                        label="Judge Prompt",
+                        visible=False,
+                        info="Select the prompt to use as the judge for evaluation.",
+                        interactive=True  # Add this line
+                    )
+
+            compile_button = gr.Button("Compile Program", visible=False, variant="primary")
+            # BOOK: Optimization -- the results are displayed side by side:
+            # baseline score versus optimized ("Evaluation") score.
+            with gr.Column() as compilation_results:
+                gr.Markdown("### Results")
+                score_summary = gr.Markdown(visible=False)  # e.g. "Baseline: 45.00%, Optimized: 78.00%"
+
+                with gr.Row():
+                    signature = gr.Textbox(label="Signature", interactive=False, info="The compiled signature of your DSPy program, showing inputs and outputs.")
+                    evaluation_score = gr.Number(label="Evaluation Score", info="The evaluation score of your compiled DSPy program.", interactive=False)
+                    baseline_score = gr.Number(label="Baseline Score", info="The baseline score of your unoptimized DSPy module.", interactive=False)
+
+                with gr.Row():
+                    cost_display = gr.Textbox(label="💰 Cost", interactive=False, info="Actual cost of compilation in USD")
+                    tokens_display = gr.Textbox(label="🎫 Tokens Used", interactive=False, info="Total tokens (input + output)")
+
+                # BOOK: Inference -- the full prompt that was sent to the LM, so
+                # users can see exactly what instructions and examples the
+                # optimizer produced.
+                optimized_prompt = gr.Textbox(label="Optimized Prompt", info="The optimized prompt generated by the DSPy compiler for your program.", interactive=False)
+
+            # BOOK: Inference -- pick a row, press Generate, see the output.
+            with gr.Row():
+
+                # Add a dropdown to select a row from the dataset
+                with gr.Column(scale=1):
+                    human_readable_id = gr.Textbox(interactive=False, visible=False)
+                    row_selector = gr.Dropdown(
+                        choices=[],
+                        label="Select a row from the dataset",
+                        interactive=True,
+                        visible=False,
+                        info="Choose a specific row from the loaded dataset to use as input for your compiled program."
+                    )
+                    random_row_button = gr.Button("Select Random Row", visible=False, interactive=True)
+                    generate_button = gr.Button("Generate", interactive=True, visible=False, variant="primary")
+
+
+                    
+
+                with gr.Column(scale=2):
+
+                    generate_output = gr.Textbox(label="Generated Response", info="The input and output generated by your compiled DSPy program.", interactive=False, lines=10, visible=False)
+
+                    with gr.Row(visible=False) as evaluation_row:
+                        evaluation_score_display = gr.Number(label="Evaluation Score", interactive=False, precision=4)
+                        evaluation_metric_display = gr.Textbox(label="Metric Type", interactive=False, max_lines=1)
+
+                def select_random_row(row_choice_options):                    
+                    if row_choice_options:
+                        random_choice = random.choice(row_choice_options)
+                        return gr.update(value=random_choice, visible=True)
+                    return gr.update(visible=True)
+
+            def process_csv(file, *args):
+                """
+                Process uploaded CSV file and validate headers against expected field names.
+                Returns: (example_data_value, example_data_update, compile_button_update,
+                         error_message_update, enter_manually_btn_update, upload_csv_btn_update)
+                """
+                # Default error return with all 6 values
+                default_error = (None, gr.update(visible=False), gr.update(visible=False),
+                               gr.update(visible=False), gr.update(interactive=False),
+                               gr.update(interactive=False))
+
+                if file is not None:
+                    try:
+                        # Validate file object has required attributes
+                        if not hasattr(file, 'name'):
+                            return (None, gr.update(visible=False), gr.update(visible=False),
+                                  gr.update(visible=True, value="Error: Invalid file object"),
+                                  gr.update(interactive=False), gr.update(interactive=False))
+
+                        df = pd.read_csv(file.name)
+
+                        # Correctly assign input and output fields based on the actual arguments
+                        input_fields = []
+                        output_fields = []
+                        filtered_args = [args[i] for i in range(0, len(args), 3)]  # Filter out descriptions and visibility
+                        for arg in filtered_args:
+                            if arg and isinstance(arg, str) and arg.strip():
+                                if len(input_fields) < len(input_values):
+                                    input_fields.append(arg)
+                                elif len(output_fields) < len(output_values):
+                                    output_fields.append(arg)
+                        expected_headers = input_fields + output_fields
+
+                        if list(df.columns) != expected_headers:
+                            return (None, gr.update(visible=False), gr.update(visible=False),
+                                  gr.update(visible=True, value=f"Error: CSV headers do not match expected format. Expected: {expected_headers}, Got: {list(df.columns)}"),
+                                  gr.update(interactive=False), gr.update(interactive=False))
+
+                        # Success: show dataframe and enable compile button
+                        return (df, gr.update(visible=True), gr.update(visible=True),
+                               gr.update(visible=False), gr.update(interactive=False),
+                               gr.update(interactive=False))
+                    except Exception as e:
+                        return (None, gr.update(visible=False), gr.update(visible=False),
+                               gr.update(visible=True, value=f"Error: {str(e)}"),
+                               gr.update(interactive=False), gr.update(interactive=False))
+
+                return default_error
+
+            # Function to show/hide the hint textbox and max_iters based on the selected module
+            def update_module_params_visibility(module):
+                hint_visible = module == "ChainOfThoughtWithHint"
+                max_iters_visible = module == "ProgramOfThought"
+                return gr.update(visible=hint_visible), gr.update(visible=max_iters_visible)
+
+            # Connect the visibility update function to the module dropdown
+            dspy_module.change(update_module_params_visibility, inputs=[dspy_module], outputs=[hint_textbox, max_iters])
+
+
+            def load_prompt_into_compiler(prompt_data):
+                """
+                Load a saved prompt's configuration into the compiler interface.
+                Takes prompt data from View Prompts and populates all fields.
+                """
+                if prompt_data is None:
+                    return {}
+
+                details = json.loads(prompt_data["Details"])
+
+                # Convert input/output fields to (name, description) tuples
+                def with_descriptions(names, descs):
+                    descs = list(descs or [])
+                    return [(name, descs[i] if i < len(descs) else '') for i, name in enumerate(names)]
+
+                input_vals = with_descriptions(
+                    details['input_fields'],
+                    details.get('input_descs', details.get('input_descriptions'))
+                )
+                output_vals = with_descriptions(
+                    details['output_fields'],
+                    details.get('output_descs', details.get('output_descriptions'))
+                )
+
+                # Try to load the dataset
+                dataset_path = f"datasets/{details['human_readable_id']}.csv"
+                example_data_path = EXAMPLE_DATA_DIR / f"{details['human_readable_id']}.csv"
+                loaded_dataset = None
+
+                if os.path.exists(dataset_path):
+                    loaded_dataset = pd.read_csv(dataset_path)
+                elif os.path.exists(example_data_path):
+                    loaded_dataset = pd.read_csv(example_data_path)
+
+                # Prepare judge_prompt value - format to match dropdown display
+                judge_prompt_value = gr.update()
+                if details.get('judge_prompt_id'):
+                    judge_data = details.get('judge_prompt_id')
+                    # Format similar to how it's displayed in the dropdown
+                    if judge_data.startswith(EXAMPLE_JUDGE_ID):
+                        judge_data = example2_signature
+                    judge_prompt_value = gr.update(choices=[judge_data], value=judge_data, visible=True)
+
+                # Return updates for all components
+                # Note: example_data and compile_button are inside @gr.render, so they'll update automatically
+                # when input_values, output_values, and file_data change
+                return (
+                    details['instructions'],  # instructions
+                    normalize_optimizer_name(details['optimizer']),  # optimizer (older prompts use the long BootstrapRS name)
+                    details.get('metric_type', 'Exact Match'),  # metric_type
+                    details['llm_model'],  # llm_model
+                    details['teacher_model'],  # teacher_model
+                    details['dspy_module'],  # dspy_module
+                    input_vals,  # input_values
+                    output_vals,  # output_values
+                    loaded_dataset,  # file_data (this will trigger re-render with the dataset visible)
+                    gr.update(interactive=len(input_vals) > 0),  # remove_input_btn
+                    gr.update(interactive=len(output_vals) > 0),  # remove_output_btn
+                    judge_prompt_value,  # judge_prompt
+                    gr.update(
+                        value=details.get('hint', ''),
+                        visible=details['dspy_module'] == "ChainOfThoughtWithHint"
+                    ),  # hint_textbox (value and visibility)
+                    gr.update(
+                        value=details.get('max_iters', 3),
+                        visible=details['dspy_module'] == "ProgramOfThought"
+                    ),  # max_iters (value and visibility)
+                    gr.update(
+                        value=details.get('k_fewshot') or 16,
+                        visible=details['optimizer'] == "LabeledFewShot"
+                    ),  # k_fewshot (value and visibility)
+                    gr.update(
+                        value=f"✅ **Loaded prompt:** {details['human_readable_id']}\n\nAll settings have been populated. You can now modify them or re-compile the program.",
+                        visible=True
+                    ),  # loaded_prompt_info
+                    gr.update(visible=loaded_dataset is not None)  # compile_button (needs data to compile)
+                )
+
+            def disable_example_buttons():
+                return gr.update(interactive=False), gr.update(interactive=False), gr.update(interactive=False)
+
+            def update_example2():
+                return (
+                    gr.update(value="Tell me a funny joke"),
+                    gr.update(value="MIPROv2"),
+                    gr.update(value="LLM-as-a-Judge"),
+                    gr.update(value=DEFAULT_STUDENT_MODEL),
+                    gr.update(value=DEFAULT_TEACHER_MODEL),
+                    gr.update(value="Predict"),
+                    [("topic", "The topic of the joke")],
+                    [("joke", "The funny joke")],
+                    *disable_example_buttons(),
+                    load_csv("telling_jokes.csv"),
+                    gr.update(visible=True),
+                    gr.update(choices=[example2_signature], value=example2_signature, visible=True)  # Update judge_prompt
+                )
+
+            example2.click(
+                update_example2,
+                inputs=[],
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button, judge_prompt]
+            )
+
+            example1.click(
+                lambda _: (
+                    gr.update(value="Rate whether a joke is funny"),
+                    gr.update(value="BootstrapRS"),
+                    gr.update(value="Exact Match"),
+                    gr.update(value=DEFAULT_STUDENT_MODEL),
+                    gr.update(value=DEFAULT_TEACHER_MODEL),
+                    gr.update(value="ChainOfThought"),
+                    [("joke", "The joke to be rated"), ("topic", "The topic of the joke")],
+                    [("funny", "Whether the joke is funny or not, 1 or 0.")],
+                    *disable_example_buttons(),
+                    load_csv("rating_jokes.csv"),
+                    gr.update(visible=True)
+                ),
+                inputs=[gr.State(None)],
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button]
+            )
+
+            example3.click(
+                lambda _: (
+                    gr.update(value="Rewrite in a comedian's style"),
+                    gr.update(value="BootstrapFewShot"),
+                    gr.update(value="Cosine Similarity"),
+                    gr.update(value="anthropic/claude-haiku-5.5"),
+                    gr.update(value="anthropic/claude-sonnet-5.5"),
+                    gr.update(value="Predict"),
+                    [("joke", "The joke to be rewritten"), ("comedian", "The comedian the joke should be rewritten in the style of")],
+                    [("rewritten_joke", "The rewritten joke")],
+                    *disable_example_buttons(),
+                    load_csv("rewriting_jokes.csv"),
+                    gr.update(visible=True)
+                ),
+                inputs=[gr.State(None)],
+                outputs=[instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module, input_values, output_values, example1, example2, example3, file_data, compile_button]
+            )
+
+            # Watcher to auto-load when a prompt is selected from View Prompts tab
+            load_prompt_data.change(
+                load_prompt_into_compiler,
+                inputs=[load_prompt_data],
+                outputs=[
+                    instructions, optimizer, metric_type, llm_model, teacher_model, dspy_module,
+                    input_values, output_values, file_data,
+                    remove_input_btn, remove_output_btn, judge_prompt, hint_textbox, max_iters, k_fewshot,
+                    loaded_prompt_info, compile_button
+                ]
+            )
+
+        with gr.TabItem("Build Chain"):
+            gr.Markdown("# 🔗 Chain Builder")
+            gr.Markdown("""
+            Create multi-step DSPy programs by chaining modules together. Each step's output becomes available as input to subsequent steps.
+
+            **Example use case**: First step extracts keywords from text, second step uses those keywords to generate a summary.
+            """)
+
+            # Chain configuration
+            with gr.Row():
+                chain_name = gr.Textbox(label="Chain Name", placeholder="e.g., Text Analyzer")
+                chain_description = gr.Textbox(label="Description", placeholder="e.g., Extracts keywords then summarizes")
+
+            # Initial inputs and final outputs
+            gr.Markdown("### Chain Inputs and Outputs")
+            gr.Markdown("Define the overall inputs to your chain and what final outputs you want to track.")
+
+            with gr.Row():
+                with gr.Column():
+                    chain_inputs_text = gr.Textbox(
+                        label="Initial Inputs (comma-separated)",
+                        placeholder="e.g., text, topic",
+                        info="Fields that will be provided when running the chain"
+                    )
+                with gr.Column():
+                    chain_outputs_text = gr.Textbox(
+                        label="Final Outputs (comma-separated)",
+                        placeholder="e.g., summary, keywords",
+                        info="Fields to evaluate in the final result"
+                    )
+
+            # Steps configuration
+            gr.Markdown("### Chain Steps")
+            gr.Markdown("Add steps to your chain. Each step is a DSPy module that processes inputs and produces outputs.")
+
+            chain_steps_state = gr.State([])
+
+            with gr.Column():
+                @gr.render(inputs=[chain_steps_state])
+                def render_chain_steps(steps):
+                    if not steps:
+                        gr.Markdown("*No steps added yet. Click 'Add Step' to begin.*")
+                    else:
+                        for i, step in enumerate(steps):
+                            with gr.Group():
+                                gr.Markdown(f"**Step {i+1}: {step.get('module_type', 'Unknown')}**")
+                                with gr.Row():
+                                    gr.Textbox(
+                                        value=step.get('signature', ''),
+                                        label="Signature",
+                                        interactive=False,
+                                        scale=2
+                                    )
+                                    gr.Textbox(
+                                        value=step.get('instructions', ''),
+                                        label="Instructions",
+                                        interactive=False,
+                                        scale=2
+                                    )
+                                gr.Textbox(
+                                    value=json.dumps(step.get('input_mapping', {})),
+                                    label="Input Mapping (JSON)",
+                                    interactive=False
+                                )
+
+            # Add step form
+            gr.Markdown("### Add New Step")
+            with gr.Row():
+                step_module_type = gr.Dropdown(
+                    choices=["Predict", "ChainOfThought", "ChainOfThoughtWithHint", "ProgramOfThought"],
+                    label="Module Type",
+                    value="ChainOfThought"
+                )
+                step_signature = gr.Textbox(
+                    label="Signature",
+                    placeholder="e.g., text -> keywords",
+                    info="Define inputs and outputs for this step"
+                )
+
+            step_instructions = gr.Textbox(
+                label="Instructions (optional)",
+                placeholder="e.g., Extract the main keywords from the text",
+                lines=2
+            )
+
+            step_input_mapping = gr.Textbox(
+                label="Input Mapping (JSON)",
+                placeholder='e.g., {"text": "text"}',
+                info="Map step inputs to chain inputs or previous step outputs. Format: {\"step_input\": \"source_field\"}",
+                lines=2
+            )
+
+            with gr.Row():
+                add_step_btn = gr.Button("➕ Add Step", variant="primary")
+                clear_steps_btn = gr.Button("🗑️ Clear All Steps", variant="stop")
+
+            def add_chain_step(steps, module_type, signature, instructions, input_mapping_str):
+                try:
+                    input_mapping = json.loads(input_mapping_str) if input_mapping_str else {}
+                except json.JSONDecodeError:
+                    return steps, "❌ Invalid JSON in input mapping"
+
+                new_step = {
+                    "module_type": module_type,
+                    "signature": signature,
+                    "instructions": instructions,
+                    "input_mapping": input_mapping
+                }
+
+                updated_steps = steps + [new_step]
+                return updated_steps, f"✅ Added step {len(updated_steps)}"
+
+            def clear_chain_steps():
+                return [], "🗑️ Cleared all steps"
+
+            step_status = gr.Markdown()
+
+            add_step_btn.click(
+                add_chain_step,
+                inputs=[chain_steps_state, step_module_type, step_signature, step_instructions, step_input_mapping],
+                outputs=[chain_steps_state, step_status]
+            )
+
+            clear_steps_btn.click(
+                clear_chain_steps,
+                outputs=[chain_steps_state, step_status]
+            )
+
+            # Dataset upload
+            gr.Markdown("### Training Data")
+            chain_dataset_upload = gr.File(label="Upload CSV Dataset", file_types=[".csv"])
+            chain_dataset_preview = gr.Dataframe(label="Dataset Preview", interactive=False)
+
+            def preview_chain_dataset(file):
+                if file is None:
+                    return None
+                df = pd.read_csv(file.name)
+                return df.head(10)
+
+            chain_dataset_upload.change(
+                preview_chain_dataset,
+                inputs=[chain_dataset_upload],
+                outputs=[chain_dataset_preview]
+            )
+
+            # Model and optimizer configuration
+            gr.Markdown("### Model & Optimization")
+            with gr.Row():
+                chain_model = gr.Dropdown(
+                    choices=[m for m in MODEL_OPTIONS if not m.startswith("local:")],
+                    label="Model",
+                    value=DEFAULT_STUDENT_MODEL
+                )
+                chain_optimizer = gr.Dropdown(
+                    choices=["BootstrapFewShot", "BootstrapRS", "LabeledFewShot", "MIPROv2", "GEPA", "COPRO", "BootstrapFinetune"],
+                    label="Optimizer",
+                    value="BootstrapFewShot"
+                )
+                chain_metric = gr.Dropdown(
+                    choices=["Exact Match", "Cosine Similarity", "LLM-as-a-Judge"],
+                    label="Evaluation Metric",
+                    value="Exact Match"
+                )
+
+            # Compile button and results
+            chain_compile_btn = gr.Button("🔨 Compile Chain", variant="primary", size="lg")
+            chain_compile_status = gr.Markdown()
+            chain_results = gr.JSON(label="Compilation Results")
+
+            def compile_chain_ui(name, description, inputs_str, outputs_str, steps, dataset_file, model, optimizer, metric, api_keys):
+                from dspyui.core import compile_chain, save_chain_program
+                import os
+
+                # Validation
+                if not name:
+                    return "❌ Please provide a chain name", None
+                if not steps:
+                    return "❌ Please add at least one step", None
+                if dataset_file is None:
+                    return "❌ Please upload a training dataset", None
+
+                try:
+                    # Parse inputs and outputs
+                    initial_inputs = [s.strip() for s in inputs_str.split(",") if s.strip()]
+                    final_outputs = [s.strip() for s in outputs_str.split(",") if s.strip()]
+
+                    if not initial_inputs:
+                        return "❌ Please specify initial inputs", None
+                    if not final_outputs:
+                        return "❌ Please specify final outputs", None
+
+                    # Load dataset
+                    dataset = pd.read_csv(dataset_file.name)
+
+                    # Build chain config
+                    chain_config = {
+                        "name": name,
+                        "description": description,
+                        "initial_inputs": initial_inputs,
+                        "final_outputs": final_outputs,
+                        "steps": steps
+                    }
+
+                    # Compile chain (the provider is part of the model name, and its
+                    # API key comes from this session's Settings tab or the environment)
+                    with use_api_keys(api_keys):
+                        compiled_chain, eval_results, cost_data = compile_chain(
+                            chain_config=chain_config,
+                            dataset=dataset,
+                            model=model,
+                            optimizer_name=optimizer,
+                            metric_type=metric,
+                            max_bootstrapped_demos=5,  # Conservative for cost
+                            max_labeled_demos=5
+                        )
+
+                    # Save chain
+                    date_str = datetime.datetime.now().strftime("%Y%m%d")
+                    model_part = model.split('/')[-1].replace('-', '').replace('.', '').replace(':', '')[:15]
+                    chain_id = f"{name.replace(' ', '')}-{model_part}_{optimizer[:15]}-{date_str}"
+
+                    saved_path = save_chain_program(
+                        human_readable_id=chain_id,
+                        chain_config=chain_config,
+                        compiled_chain=compiled_chain,
+                        dataset=dataset,
+                        evaluation_results=eval_results,
+                        cost_data=cost_data,
+                        model=model,
+                        optimizer_name=optimizer,
+                        metric_type=metric
+                    )
+
+                    results = {
+                        "chain_id": chain_id,
+                        "evaluation_score": eval_results["score"],
+                        "train_set_size": eval_results["train_set_size"],
+                        "dev_set_size": eval_results["dev_set_size"],
+                        "cost_usd": cost_data.get("actual_cost_usd", 0),
+                        "total_tokens": cost_data.get("total_tokens", 0),
+                        "saved_to": saved_path
+                    }
+
+                    status_msg = f"""
+                    ✅ **Chain compiled successfully!**
+
+                    - **ID**: {chain_id}
+                    - **Evaluation Score**: {eval_results['score']:.2f}%
+                    - **Cost**: ${cost_data.get('actual_cost_usd', 0):.4f}
+                    - **Tokens**: {cost_data.get('total_tokens', 0):,}
+                    - **Saved to**: `{saved_path}`
+                    """
+
+                    return status_msg, results
+
+                except Exception as e:
+                    import traceback
+                    error_msg = f"❌ **Compilation failed**\n\n```\n{str(e)}\n{traceback.format_exc()}\n```"
+                    return error_msg, None
+
+            chain_compile_btn.click(
+                compile_chain_ui,
+                inputs=[
+                    chain_name, chain_description, chain_inputs_text, chain_outputs_text,
+                    chain_steps_state, chain_dataset_upload, chain_model, chain_optimizer, chain_metric,
+                    api_keys_state
+                ],
+                outputs=[chain_compile_status, chain_results]
+            )
+
+        with gr.TabItem("View Prompts"):
+
+            # Import .dspyui file section
+            with gr.Accordion("📥 Import .dspyui File", open=False):
+                gr.Markdown("""
+                Upload a `.dspyui` file to import a previously exported program.
+                This will extract and save the program, dataset, and configuration to your local directories.
+                """)
+
+                with gr.Row():
+                    dspyui_upload = gr.File(
+                        label="Upload .dspyui File",
+                        file_types=[".dspyui"],
+                        type="filepath"
+                    )
+                    import_btn = gr.Button("Import", variant="primary")
+
+                import_status = gr.Markdown()
+
+                def handle_import(filepath):
+                    if filepath is None:
+                        return "⚠️ Please select a .dspyui file to import"
+
+                    from dspyui.core import import_consolidated_program
+                    success, message, human_readable_id = import_consolidated_program(filepath)
+
+                    if success:
+                        # Refresh the prompts list
+                        return message + "\n\n**Note:** Refresh the page to see the imported program in the list below."
+                    else:
+                        return message
+
+                import_btn.click(
+                    handle_import,
+                    inputs=[dspyui_upload],
+                    outputs=[import_status]
+                )
+
+            gr.Markdown("---")
+
+            prompts = list_prompts()
+
+            selected_prompt = gr.State(None)
+            # The render function below takes the *value* as a parameter with the
+            # same name, so keep a second reference to the State component itself.
+            selected_prompt_state = selected_prompt
+
+            # Extract unique signatures for the dropdown
+            unique_signatures = sorted(set(p["Signature"] for p in prompts))
+
+            close_details_btn = gr.Button("Close Details", elem_classes="close-details-btn", size="sm", visible=False)
+            close_details_btn.click(lambda: (None, gr.update(visible=False)), outputs=[selected_prompt, close_details_btn])
+            
+
+            @gr.render(inputs=[selected_prompt])
+            def render_prompt_details(selected_prompt):
+                if selected_prompt is not None:
+                    with gr.Row():
+                        with gr.Column():
+                            details = json.loads(selected_prompt["Details"])
+                            with gr.Row():
+                                gr.Markdown(f"## {details['human_readable_id']}")
+                                load_into_compiler_btn = gr.Button("📋 Load into Compiler", size="sm", variant="primary")
+                                export_dspyui_btn = gr.Button("💾 Export .dspyui", size="sm", variant="secondary")
+
+                            # Export status and download file
+                            export_status = gr.Markdown(visible=False)
+                            dspyui_download = gr.File(label="Download .dspyui file", visible=False)
+
+                            # Wire up the load button to update load_prompt_data State
+                            load_into_compiler_btn.click(
+                                lambda: selected_prompt,
+                                outputs=[load_prompt_data]
+                            )
+
+                            # Wire up export button
+                            def export_prompt_to_dspyui(selected_prompt):
+                                from dspyui.core import export_to_consolidated
+                                import os
+
+                                if selected_prompt is None:
+                                    return gr.update(visible=True, value="❌ No prompt selected"), gr.update(visible=False)
+
+                                details = json.loads(selected_prompt["Details"])
+                                human_readable_id = details['human_readable_id']
+
+                                # Try to export
+                                output_path = export_to_consolidated(human_readable_id)
+
+                                if output_path and os.path.exists(output_path):
+                                    return (
+                                        gr.update(visible=True, value=f"✅ Exported successfully to `{output_path}`"),
+                                        gr.update(visible=True, value=output_path)
+                                    )
+                                else:
+                                    return (
+                                        gr.update(visible=True, value="❌ Export failed. Make sure all program files exist."),
+                                        gr.update(visible=False)
+                                    )
+
+                            export_dspyui_btn.click(
+                                export_prompt_to_dspyui,
+                                inputs=[selected_prompt_state],
+                                outputs=[export_status, dspyui_download]
+                            )
+
+                            with gr.Group():
+                                with gr.Column(elem_classes="prompt-details-full"):
+                                    gr.Number(value=float(selected_prompt['Eval Score']), label="Evaluation Score", interactive=False)
+                                    
+                                    with gr.Row():
+                                        gr.Dropdown(choices=details['input_fields'], value=details['input_fields'], label="Input Fields", interactive=False, multiselect=True, info=", ".join(details.get('input_descs', [])))
+                                        gr.Dropdown(choices=details['output_fields'], value=details['output_fields'], label="Output Fields", interactive=False, multiselect=True, info=", ".join(details.get('output_descs', [])))
+                                    
+                                    with gr.Row():
+                                        gr.Dropdown(choices=[details['dspy_module']], value=details['dspy_module'], label="Module", interactive=False)
+                                        gr.Dropdown(choices=[details['llm_model']], value=details['llm_model'], label="Model", interactive=False)
+                                        gr.Dropdown(choices=[details['teacher_model']], value=details['teacher_model'], label="Teacher Model", interactive=False)
+                                        gr.Dropdown(choices=[details['optimizer']], value=details['optimizer'], label="Optimizer", interactive=False)
+                                    
+                                    gr.Textbox(value=details['instructions'], label="Instructions", interactive=False)
+                                    
+                                    gr.Textbox(value=details['optimized_prompt'], label="Optimized Prompt", interactive=False)
+                                    
+                                    for key, value in details.items():
+                                        if key not in ['signature', 'evaluation_score', 'input_fields', 'output_fields', 'dspy_module', 'llm_model', 'teacher_model', 'optimizer', 'instructions', 'optimized_prompt', 'human_readable_id']:
+                                            if isinstance(value, list):
+                                                gr.Dropdown(choices=value, value=value, label=key.replace('_', ' ').title(), interactive=False, multiselect=True)
+                                            elif isinstance(value, bool):
+                                                gr.Checkbox(value=value, label=key.replace('_', ' ').title(), interactive=False)
+                                            elif isinstance(value, (int, float)):
+                                                gr.Number(value=value, label=key.replace('_', ' ').title(), interactive=False)
+                                            else:
+                                                gr.Textbox(value=str(value), label=key.replace('_', ' ').title(), interactive=False)
+                        
+
+            gr.Markdown("# View Prompts")
+            
+            # Add filter and sort functionality in one line
+            with gr.Row():
+                filter_signature = gr.Dropdown(label="Filter by Signature", choices=["All"] + unique_signatures, value="All", scale=2)
+                sort_by = gr.Radio(["Run Date", "Evaluation Score", "Cost"], label="Sort by", value="Run Date", scale=1)
+                sort_order = gr.Radio(["Descending", "Ascending"], label="Sort Order", value="Descending", scale=1)
+
+            @gr.render(inputs=[filter_signature, sort_by, sort_order])
+            def render_prompts(filter_signature, sort_by, sort_order):
+                if filter_signature and filter_signature != "All":
+                    filtered_prompts = list_prompts(signature_filter=filter_signature)
+                else:
+                    filtered_prompts = prompts
+
+                if sort_by == "Evaluation Score":
+                    key_func = lambda x: float(x["Eval Score"])
+                elif sort_by == "Cost":
+                    key_func = lambda x: float(x.get("Cost", 0))
+                else:  # Run Date
+                    key_func = lambda x: x["ID"]  # Use the entire ID for sorting
+                
+                sorted_prompts = sorted(filtered_prompts, key=key_func, reverse=(sort_order == "Descending"))
+                
+                prompt_components = []
+                
+                for i in range(0, len(sorted_prompts), 3):
+                    with gr.Row():
+                        for j in range(3):
+                            if i + j < len(sorted_prompts):
+                                prompt = sorted_prompts[i + j]
+                                with gr.Column():
+                                    with gr.Group(elem_classes="prompt-card"):
+                                        with gr.Column(elem_classes="prompt-details"):
+                                            gr.Markdown(f"**ID:** {prompt['ID']}")
+                                            gr.Markdown(f"**Signature:** {prompt['Signature']}")
+                                            gr.Markdown(f"**Eval Score:** {prompt['Eval Score']}")
+                                            cost_val = prompt.get('Cost', 0)
+                                            tokens_val = prompt.get('Tokens', 0)
+                                            gr.Markdown(f"**💰 Cost:** ${cost_val:.4f} | **🎫 Tokens:** {tokens_val:,}")
+                                        view_details_btn = gr.Button("View Details", elem_classes="view-details-btn", size="sm")
+                                    
+                                    prompt_components.append((prompt, view_details_btn))
+                
+                for prompt, btn in prompt_components:
+                    btn.click(
+                        lambda p=prompt: (p, gr.update(visible=True)),
+                        outputs=[selected_prompt, close_details_btn]
+                    )
+
+        with gr.TabItem("Settings"):
+            gr.Markdown("# API Key Configuration")
+            gr.Markdown("""
+            Configure your API keys for different LLM providers. These keys are stored in your session only and never saved to disk.
+
+            ⚠️ **Security Note:** Your API keys are only stored for the duration of your session and are not persisted.
+            """)
+
+            # The keys themselves live in `api_keys_state` (defined at the top of
+            # this file): one copy per browser session, kept on the server.
+            #
+            # Keys that are already in the environment (.env, Spaces secrets) are
+            # deliberately NOT put into these boxes. Anything given to a Textbox
+            # as its value is sent to the browser, so on a shared deployment every
+            # visitor could read them. The Status column shows which providers
+            # are configured instead.
+            # OpenRouter comes first because it is the recommended setup: one key
+            # that works for every model in the Model and Teacher lists, including
+            # the openai/, anthropic/, gemini/ and groq/ ones (see make_lm() in core.py).
+            API_KEY_PROVIDERS = {
+                "OPENROUTER_API_KEY": "OpenRouter (recommended)",
+                "OPENAI_API_KEY": "OpenAI (GPT models)",
+                "ANTHROPIC_API_KEY": "Anthropic (Claude models)",
+                "GROQ_API_KEY": "Groq",
+                "GOOGLE_API_KEY": "Google (Gemini models)"
+            }
+
+            def _in_environment(key):
+                # The book's .env uses GEMINI_API_KEY for Gemini; older DSPyUI
+                # versions used GOOGLE_API_KEY. Either works.
+                if key == "GOOGLE_API_KEY":
+                    return key_is_set(os.environ.get("GEMINI_API_KEY")) or key_is_set(os.environ.get("GOOGLE_API_KEY"))
+                return key_is_set(os.environ.get(key))
+
+            # Helper function for API status
+            def _get_api_status_static(keys_dict):
+                """Get formatted status of API keys: this session's keys plus the environment's."""
+                status = ""
+                configured = {
+                    key: key_is_set(keys_dict.get(key)) or _in_environment(key)
+                    for key in API_KEY_PROVIDERS
+                }
+
+                for key, name in API_KEY_PROVIDERS.items():
+                    icon = "✅" if configured[key] else "❌"
+                    status += f"{icon} **{name}**: {'Configured' if configured[key] else 'Not configured'}\n"
+
+                if not any(configured.values()):
+                    status += "\n⚠️ **No API keys configured.** Add an OpenRouter key to use the models in the Model and Teacher lists.\n"
+                    status += "💡 **Tip:** You can still use local LLMs (LM Studio, Ollama) without API keys."
+
+                return status
+
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### Provider API Keys")
+
+                    openrouter_key = gr.Textbox(
+                        label="OpenRouter API Key (recommended)",
+                        type="password",
+                        placeholder="sk-or-...",
+                        info="One key that works for every model in the Model and Teacher lists. The keys below are only needed to call a provider directly."
+                    )
+
+                    openai_key = gr.Textbox(
+                        label="OpenAI API Key",
+                        type="password",
+                        placeholder="sk-...",
+                        info="Optional: call GPT models directly instead of through OpenRouter"
+                    )
+
+                    anthropic_key = gr.Textbox(
+                        label="Anthropic API Key",
+                        type="password",
+                        placeholder="sk-ant-...",
+                        info="Optional: call Claude models directly instead of through OpenRouter"
+                    )
+
+                    groq_key = gr.Textbox(
+                        label="Groq API Key",
+                        type="password",
+                        placeholder="gsk_...",
+                        info="Optional: call Groq models directly instead of through OpenRouter"
+                    )
+
+                    google_key = gr.Textbox(
+                        label="Google API Key",
+                        type="password",
+                        placeholder="AI...",
+                        info="Optional: call Gemini models directly instead of through OpenRouter"
+                    )
+
+                with gr.Column():
+                    gr.Markdown("### Status")
+                    api_status = gr.Markdown(_get_api_status_static({}))
+
+            with gr.Row():
+                save_keys_btn = gr.Button("💾 Save API Keys", variant="primary")
+                clear_keys_btn = gr.Button("🗑️ Clear All Keys", variant="secondary")
+
+            save_status = gr.Markdown(visible=False)
+
+            def update_api_keys(openai, anthropic, groq, google, openrouter):
+                """Update API keys in session state."""
+                entered = {
+                    "OPENAI_API_KEY": openai,
+                    "ANTHROPIC_API_KEY": anthropic,
+                    "GROQ_API_KEY": groq,
+                    "GOOGLE_API_KEY": google,
+                    "OPENROUTER_API_KEY": openrouter
+                }
+                # Only the boxes that were filled in. A box left empty means "use
+                # the key from the environment, if there is one" - it never
+                # removes anything from the environment.
+                keys = {key: value.strip() for key, value in entered.items() if key_is_set(value)}
+
+                status_msg = "✅ API keys saved successfully!\n\n"
+                status_msg += _get_api_status_static(keys)
+
+                return keys, gr.update(visible=True, value=status_msg), gr.update(value=status_msg)
+
+            def clear_all_keys():
+                """Clear the API keys entered in this session (the environment is left alone)."""
+                keys = {}
+
+                status_msg = "🗑️ All API keys cleared.\n\n"
+                status_msg += _get_api_status_static(keys)
+
+                return (
+                    keys,
+                    gr.update(value=""),  # openrouter_key
+                    gr.update(value=""),  # openai_key
+                    gr.update(value=""),  # anthropic_key
+                    gr.update(value=""),  # groq_key
+                    gr.update(value=""),  # google_key
+                    gr.update(visible=True, value=status_msg),
+                    gr.update(value=status_msg)
+                )
+
+            save_keys_btn.click(
+                update_api_keys,
+                inputs=[openai_key, anthropic_key, groq_key, google_key, openrouter_key],  # same order as update_api_keys()
+                outputs=[api_keys_state, save_status, api_status]
+            )
+
+            clear_keys_btn.click(
+                clear_all_keys,
+                outputs=[api_keys_state, openrouter_key, openai_key, anthropic_key, groq_key, google_key, save_status, api_status]
+            )
+
+if __name__ == "__main__":
+    demo.launch()
