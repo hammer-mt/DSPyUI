@@ -297,3 +297,27 @@ class TestApiKeys:
         )
         result = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120)
         assert "CONFIG_CLEAN" in result.stdout, result.stdout[-500:] + result.stderr[-1500:]
+
+
+class TestLauncher:
+    def test_launcher_rebuilds_the_interface_in_gradio_reload_mode(self, tmp_path):
+        """`gradio interface.py` (used by webui.sh) resets Gradio's component counter and
+        runs the launcher again. The counter must end up where it was after the first
+        run, or components drawn later by gr.render collide with existing ones."""
+        import os, subprocess, sys
+        launcher = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "interface.py")
+        if not os.path.exists(launcher):
+            pytest.skip("launcher is only present in a repository checkout")
+        code = (
+            "import sys\n"
+            "from gradio.context import Context\n"
+            f"source = open({launcher!r}).read().split('if __name__')[0]\n"
+            "namespace = {'__name__': 'interface'}\n"
+            "exec(source, namespace); first = Context.id\n"
+            "Context.id = 0\n"
+            "exec(source, namespace); second = Context.id\n"
+            "print('COUNTERS', first, second)\n"
+            "sys.exit(0 if first == second and first > 100 else 1)\n"
+        )
+        result = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, capture_output=True, text=True, timeout=180)
+        assert result.returncode == 0, result.stdout[-300:] + result.stderr[-1500:]

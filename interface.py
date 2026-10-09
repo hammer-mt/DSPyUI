@@ -10,7 +10,16 @@ The app itself lives in the dspyui/ package:
                           load_and_split(), compile_program(), run_inference()
 """
 
-# The app is built in dspyui/interface.py (`with gr.Blocks(css=custom_css) as demo:`)
+import sys
+
+# The app is built in dspyui/interface.py (`with gr.Blocks(css=custom_css) as demo:`).
+#
+# `gradio interface.py` (which webui.sh uses) runs in reload mode: Gradio resets
+# its component counter and runs this file a second time, expecting that to
+# build the interface again. Forgetting the module first makes the import below
+# do exactly that; without it the counter stays at zero and the parts of the
+# page that are drawn on demand (the Data section) fail to render.
+sys.modules.pop("dspyui.interface", None)
 from dspyui.interface import demo
 
 if __name__ == "__main__":
